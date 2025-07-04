@@ -42,13 +42,19 @@ export default function Home() {
     // Load user data and media lists
     useEffect(() => {
         const loadUserData = async () => {
-            if (!client || !session?.accessToken) return
+            if (!client || !session?.accessToken) {
+                console.log('No client or session, skipping load')
+                return
+            }
+
+            console.log('Loading user data...', { hasUser: !!user })
 
             try {
                 setIsLoadingLists(true)
 
                 // Get current user
                 const userData = await client.getCurrentUser()
+                console.log('Got user data:', userData.name)
                 setUser(userData)
 
                 // Load both anime and manga lists
@@ -57,6 +63,7 @@ export default function Home() {
                     client.getAllMediaLists(userData.id, MediaType.MANGA),
                 ])
 
+                console.log('Loaded lists:', { anime: animeLists.length, manga: mangaLists.length })
                 setAnimeLists(animeLists)
                 setMangaLists(mangaLists)
 
@@ -77,7 +84,7 @@ export default function Home() {
         }
 
         loadUserData()
-    }, [client, session, setUser, setAnimeLists, setMangaLists, setIsLoadingLists, setError, addNotification])
+    }, [client, session?.accessToken])
 
     // Apply dark mode class to document
     useEffect(() => {

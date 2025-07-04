@@ -125,18 +125,17 @@ export default function FilterPanel() {
 
             {/* Search Bar - Always Visible */}
             <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                     type="text"
                     value={filters.search || ''}
                     onChange={(e) => setFilters({ search: e.target.value })}
                     placeholder="Search by title..."
-                    className="input pl-10 pr-10"
+                    className="input pr-10"
                 />
                 {filters.search && (
                     <button
                         onClick={() => setFilters({ search: '' })}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 z-10"
                     >
                         <X className="w-4 h-4" />
                     </button>

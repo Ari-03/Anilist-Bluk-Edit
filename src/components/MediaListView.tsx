@@ -56,6 +56,13 @@ export default function MediaListView({ client }: MediaListViewProps) {
         }
     }, [currentType, currentStatus, animeLists.length, mangaLists.length, applyFilters])
 
+    // Simple debug to check if we have entries and scores
+    useEffect(() => {
+        if (filteredEntries.length > 0) {
+            console.log(`Found ${filteredEntries.length} entries. User score format: ${user?.mediaListOptions?.scoreFormat}`);
+        }
+    }, [filteredEntries.length, user?.mediaListOptions?.scoreFormat])
+
     // Calculate status counts from the base lists (before status filtering)
     const baseLists = currentType === MediaType.ANIME ? animeLists : mangaLists
 
@@ -267,7 +274,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                         )}
 
                                         {/* Score */}
-                                        {entry.score && (
+                                        {(entry.score || entry.score === 0) && (
                                             <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 rounded px-2 py-1">
                                                 <Star className="w-3 h-3 text-yellow-400 fill-current" />
                                                 <span className="text-white text-xs">
@@ -324,7 +331,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                                     {getStatusLabel(entry.status)}
                                                 </span>
                                             )}
-                                            {entry.score && (
+                                            {(entry.score || entry.score === 0) && (
                                                 <span className="flex items-center gap-1">
                                                     <Star className="w-3 h-3 text-yellow-400 fill-current" />
                                                     {user?.mediaListOptions?.scoreFormat
