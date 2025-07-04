@@ -5,6 +5,16 @@ module.exports = {
         './src/components/**/*.{js,ts,jsx,tsx,mdx}',
         './src/app/**/*.{js,ts,jsx,tsx,mdx}',
     ],
+    safelist: [
+        // Status colors for media entries
+        'bg-green-500',
+        'bg-blue-500',
+        'bg-purple-500',
+        'bg-red-500',
+        'bg-orange-500',
+        'bg-indigo-500',
+        'bg-gray-500'
+    ],
     darkMode: 'class',
     theme: {
         extend: {

@@ -1,31 +1,31 @@
 import { GraphQLClient } from 'graphql-request'
 import {
-    User,
-    MediaList,
-    MediaListStatus,
-    MediaType,
-    MediaListOptions,
-    Media,
-    ScoreFormat,
+  User,
+  MediaList,
+  MediaListStatus,
+  MediaType,
+  MediaListOptions,
+  Media,
+  ScoreFormat,
 } from '@/types/anilist'
 
 export const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co'
 
 export class AniListClient {
-    private client: GraphQLClient
+  private client: GraphQLClient
 
-    constructor(accessToken?: string) {
-        this.client = new GraphQLClient(ANILIST_GRAPHQL_URL, {
-            headers: accessToken
-                ? {
-                    Authorization: `Bearer ${accessToken}`,
-                }
-                : {},
-        })
-    }
+  constructor(accessToken?: string) {
+    this.client = new GraphQLClient(ANILIST_GRAPHQL_URL, {
+      headers: accessToken
+        ? {
+          Authorization: `Bearer ${accessToken}`,
+        }
+        : {},
+    })
+  }
 
-    async getCurrentUser(): Promise<User> {
-        const query = `
+  async getCurrentUser(): Promise<User> {
+    const query = `
       query GetCurrentUser {
         Viewer {
           id
@@ -78,16 +78,16 @@ export class AniListClient {
       }
     `
 
-        const data = await this.client.request<{ Viewer: User }>(query)
-        return data.Viewer
-    }
+    const data = await this.client.request<{ Viewer: User }>(query)
+    return data.Viewer
+  }
 
-    async getMediaListCollection(
-        userId: number,
-        type: MediaType,
-        status?: MediaListStatus
-    ): Promise<MediaList[]> {
-        const query = `
+  async getMediaListCollection(
+    userId: number,
+    type: MediaType,
+    status?: MediaListStatus
+  ): Promise<MediaList[]> {
+    const query = `
       query GetMediaListCollection($userId: Int!, $type: MediaType!, $status: MediaListStatus) {
         MediaListCollection(userId: $userId, type: $type, status: $status) {
           lists {
@@ -179,16 +179,16 @@ export class AniListClient {
       }
     `
 
-        const variables = { userId, type, status }
-        const data = await this.client.request<{
-            MediaListCollection: { lists: { entries: MediaList[] }[] }
-        }>(query, variables)
+    const variables = { userId, type, status }
+    const data = await this.client.request<{
+      MediaListCollection: { lists: { entries: MediaList[] }[] }
+    }>(query, variables)
 
-        return data.MediaListCollection.lists.flatMap((list) => list.entries)
-    }
+    return data.MediaListCollection.lists.flatMap((list) => list.entries)
+  }
 
-    async getAllMediaLists(userId: number, type: MediaType): Promise<MediaList[]> {
-        const query = `
+  async getAllMediaLists(userId: number, type: MediaType): Promise<MediaList[]> {
+    const query = `
       query GetAllMediaLists($userId: Int!, $type: MediaType!) {
         MediaListCollection(userId: $userId, type: $type) {
           lists {
@@ -282,33 +282,33 @@ export class AniListClient {
       }
     `
 
-        const variables = { userId, type }
-        const data = await this.client.request<{
-            MediaListCollection: { lists: { entries: MediaList[] }[] }
-        }>(query, variables)
+    const variables = { userId, type }
+    const data = await this.client.request<{
+      MediaListCollection: { lists: { entries: MediaList[] }[] }
+    }>(query, variables)
 
-        return data.MediaListCollection.lists.flatMap((list) => list.entries)
-    }
+    return data.MediaListCollection.lists.flatMap((list) => list.entries)
+  }
 
-    async updateMediaListEntry(
-        mediaId: number,
-        updates: Partial<{
-            status: MediaListStatus
-            score: number
-            progress: number
-            progressVolumes: number
-            repeat: number
-            priority: number
-            private: boolean
-            notes: string
-            hiddenFromStatusLists: boolean
-            customLists: string[]
-            advancedScores: Record<string, number>
-            startedAt: { year?: number; month?: number; day?: number }
-            completedAt: { year?: number; month?: number; day?: number }
-        }>
-    ): Promise<MediaList> {
-        const mutation = `
+  async updateMediaListEntry(
+    mediaId: number,
+    updates: Partial<{
+      status: MediaListStatus
+      score: number
+      progress: number
+      progressVolumes: number
+      repeat: number
+      priority: number
+      private: boolean
+      notes: string
+      hiddenFromStatusLists: boolean
+      customLists: string[]
+      advancedScores: Record<string, number>
+      startedAt: { year?: number; month?: number; day?: number }
+      completedAt: { year?: number; month?: number; day?: number }
+    }>
+  ): Promise<MediaList> {
+    const mutation = `
       mutation UpdateMediaListEntry(
         $mediaId: Int!
         $status: MediaListStatus
@@ -387,70 +387,70 @@ export class AniListClient {
       }
     `
 
-        const variables = { mediaId, ...updates }
-        const data = await this.client.request<{
-            SaveMediaListEntry: MediaList
-        }>(mutation, variables)
+    const variables = { mediaId, ...updates }
+    const data = await this.client.request<{
+      SaveMediaListEntry: MediaList
+    }>(mutation, variables)
 
-        return data.SaveMediaListEntry
-    }
+    return data.SaveMediaListEntry
+  }
 
-    async bulkUpdateMediaListEntries(
-        updates: Array<{
-            mediaId: number
-            status?: MediaListStatus
-            score?: number
-            progress?: number
-            progressVolumes?: number
-            repeat?: number
-            priority?: number
-            private?: boolean
-            notes?: string
-            hiddenFromStatusLists?: boolean
-            customLists?: string[]
-            advancedScores?: Record<string, number>
-            startedAt?: { year?: number; month?: number; day?: number }
-            completedAt?: { year?: number; month?: number; day?: number }
-        }>
-    ): Promise<MediaList[]> {
-        // AniList doesn't have a bulk update mutation, so we'll do individual updates
-        // We'll batch them in groups to avoid rate limiting
-        const results: MediaList[] = []
-        const batchSize = 5 // Conservative batch size to avoid rate limits
+  async bulkUpdateMediaListEntries(
+    updates: Array<{
+      mediaId: number
+      status?: MediaListStatus
+      score?: number
+      progress?: number
+      progressVolumes?: number
+      repeat?: number
+      priority?: number
+      private?: boolean
+      notes?: string
+      hiddenFromStatusLists?: boolean
+      customLists?: string[]
+      advancedScores?: Record<string, number>
+      startedAt?: { year?: number; month?: number; day?: number }
+      completedAt?: { year?: number; month?: number; day?: number }
+    }>
+  ): Promise<MediaList[]> {
+    // AniList doesn't have a bulk update mutation, so we'll do individual updates
+    // We'll batch them in groups to avoid rate limiting
+    const results: MediaList[] = []
+    const batchSize = 5 // Conservative batch size to avoid rate limits
 
-        for (let i = 0; i < updates.length; i += batchSize) {
-            const batch = updates.slice(i, i + batchSize)
-            const batchPromises = batch.map(({ mediaId, ...update }) =>
-                this.updateMediaListEntry(mediaId, update)
-            )
+    for (let i = 0; i < updates.length; i += batchSize) {
+      const batch = updates.slice(i, i + batchSize)
+      const batchPromises = batch.map(({ mediaId, ...update }) =>
+        this.updateMediaListEntry(mediaId, update)
+      )
 
-            try {
-                const batchResults = await Promise.all(batchPromises)
-                results.push(...batchResults)
-            } catch (error) {
-                // If a batch fails, try individual updates
-                console.warn(`Batch ${i / batchSize + 1} failed, trying individual updates:`, error)
-                for (const { mediaId, ...update } of batch) {
-                    try {
-                        const result = await this.updateMediaListEntry(mediaId, update)
-                        results.push(result)
-                    } catch (individualError) {
-                        console.error(`Failed to update media ${mediaId}:`, individualError)
-                    }
-                }
-            }
-
-            // Add a small delay between batches to be respectful to the API
-            if (i + batchSize < updates.length) {
-                await new Promise((resolve) => setTimeout(resolve, 1000))
-            }
+      try {
+        const batchResults = await Promise.all(batchPromises)
+        results.push(...batchResults)
+      } catch (error) {
+        // If a batch fails, try individual updates
+        console.warn(`Batch ${i / batchSize + 1} failed, trying individual updates:`, error)
+        for (const { mediaId, ...update } of batch) {
+          try {
+            const result = await this.updateMediaListEntry(mediaId, update)
+            results.push(result)
+          } catch (individualError) {
+            console.error(`Failed to update media ${mediaId}:`, individualError)
+          }
         }
+      }
 
-        return results
+      // Add a small delay between batches to be respectful to the API
+      if (i + batchSize < updates.length) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
     }
 
-    async deleteMediaListEntry(id: number): Promise<{ deleted: boolean }> {
-        const mutation = `
+    return results
+  }
+
+  async deleteMediaListEntry(id: number): Promise<{ deleted: boolean }> {
+    const mutation = `
       mutation DeleteMediaListEntry($id: Int!) {
         DeleteMediaListEntry(id: $id) {
           deleted
@@ -458,21 +458,21 @@ export class AniListClient {
       }
     `
 
-        const variables = { id }
-        const data = await this.client.request<{
-            DeleteMediaListEntry: { deleted: boolean }
-        }>(mutation, variables)
+    const variables = { id }
+    const data = await this.client.request<{
+      DeleteMediaListEntry: { deleted: boolean }
+    }>(mutation, variables)
 
-        return data.DeleteMediaListEntry
-    }
+    return data.DeleteMediaListEntry
+  }
 
-    async searchMedia(
-        search: string,
-        type: MediaType,
-        page: number = 1,
-        perPage: number = 20
-    ): Promise<{ media: Media[]; pageInfo: { hasNextPage: boolean; total: number } }> {
-        const query = `
+  async searchMedia(
+    search: string,
+    type: MediaType,
+    page: number = 1,
+    perPage: number = 20
+  ): Promise<{ media: Media[]; pageInfo: { hasNextPage: boolean; total: number } }> {
+    const query = `
       query SearchMedia($search: String!, $type: MediaType!, $page: Int!, $perPage: Int!) {
         Page(page: $page, perPage: $perPage) {
           pageInfo {
@@ -531,76 +531,76 @@ export class AniListClient {
       }
     `
 
-        const variables = { search, type, page, perPage }
-        const data = await this.client.request<{
-            Page: {
-                pageInfo: { hasNextPage: boolean; total: number }
-                media: Media[]
-            }
-        }>(query, variables)
+    const variables = { search, type, page, perPage }
+    const data = await this.client.request<{
+      Page: {
+        pageInfo: { hasNextPage: boolean; total: number }
+        media: Media[]
+      }
+    }>(query, variables)
 
-        return {
-            media: data.Page.media,
-            pageInfo: data.Page.pageInfo,
-        }
+    return {
+      media: data.Page.media,
+      pageInfo: data.Page.pageInfo,
     }
+  }
 }
 
 // Utility functions
 export const getScoreDisplay = (score: number, format: ScoreFormat): string => {
-    switch (format) {
-        case ScoreFormat.POINT_100:
-            return score.toString()
-        case ScoreFormat.POINT_10_DECIMAL:
-            return (score / 10).toFixed(1)
-        case ScoreFormat.POINT_10:
-            return Math.round(score / 10).toString()
-        case ScoreFormat.POINT_5:
-            return Math.round(score / 20).toString()
-        case ScoreFormat.POINT_3:
-            if (score >= 85) return '😊'
-            if (score >= 60) return '😐'
-            if (score > 0) return '😞'
-            return ''
-        default:
-            return score.toString()
-    }
+  switch (format) {
+    case ScoreFormat.POINT_100:
+      return score.toString()
+    case ScoreFormat.POINT_10_DECIMAL:
+      return (score / 10).toFixed(1)
+    case ScoreFormat.POINT_10:
+      return Math.round(score / 10).toString()
+    case ScoreFormat.POINT_5:
+      return Math.round(score / 20).toString()
+    case ScoreFormat.POINT_3:
+      if (score >= 85) return '😊'
+      if (score >= 60) return '😐'
+      if (score > 0) return '😞'
+      return ''
+    default:
+      return score.toString()
+  }
 }
 
 export const getStatusColor = (status: MediaListStatus): string => {
-    switch (status) {
-        case MediaListStatus.CURRENT:
-            return 'bg-green-500'
-        case MediaListStatus.PLANNING:
-            return 'bg-blue-500'
-        case MediaListStatus.COMPLETED:
-            return 'bg-purple-500'
-        case MediaListStatus.DROPPED:
-            return 'bg-red-500'
-        case MediaListStatus.PAUSED:
-            return 'bg-yellow-500'
-        case MediaListStatus.REPEATING:
-            return 'bg-indigo-500'
-        default:
-            return 'bg-gray-500'
-    }
+  switch (status) {
+    case MediaListStatus.CURRENT:
+      return 'bg-green-500'
+    case MediaListStatus.PLANNING:
+      return 'bg-blue-500'
+    case MediaListStatus.COMPLETED:
+      return 'bg-purple-500'
+    case MediaListStatus.DROPPED:
+      return 'bg-red-500'
+    case MediaListStatus.PAUSED:
+      return 'bg-orange-500'
+    case MediaListStatus.REPEATING:
+      return 'bg-indigo-500'
+    default:
+      return 'bg-gray-500'
+  }
 }
 
 export const getStatusLabel = (status: MediaListStatus): string => {
-    switch (status) {
-        case MediaListStatus.CURRENT:
-            return 'Watching'
-        case MediaListStatus.PLANNING:
-            return 'Planning'
-        case MediaListStatus.COMPLETED:
-            return 'Completed'
-        case MediaListStatus.DROPPED:
-            return 'Dropped'
-        case MediaListStatus.PAUSED:
-            return 'Paused'
-        case MediaListStatus.REPEATING:
-            return 'Rewatching'
-        default:
-            return 'Unknown'
-    }
+  switch (status) {
+    case MediaListStatus.CURRENT:
+      return 'Watching'
+    case MediaListStatus.PLANNING:
+      return 'Planning'
+    case MediaListStatus.COMPLETED:
+      return 'Completed'
+    case MediaListStatus.DROPPED:
+      return 'Dropped'
+    case MediaListStatus.PAUSED:
+      return 'Paused'
+    case MediaListStatus.REPEATING:
+      return 'Rewatching'
+    default:
+      return 'Unknown'
+  }
 } 
