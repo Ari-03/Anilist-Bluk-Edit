@@ -264,8 +264,8 @@ export default function Home() {
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            {/* Debug Panel */}
-                            <DebugPanel />
+                            {/* Debug Panel
+                            <DebugPanel /> */}
 
                             {/* Filter Panel */}
                             <FilterPanel />

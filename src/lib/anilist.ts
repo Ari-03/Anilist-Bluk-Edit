@@ -586,10 +586,10 @@ export const getStatusColor = (status: MediaListStatus): string => {
   }
 }
 
-export const getStatusLabel = (status: MediaListStatus): string => {
+export const getStatusLabel = (status: MediaListStatus, mediaType?: MediaType): string => {
   switch (status) {
     case MediaListStatus.CURRENT:
-      return 'Watching'
+      return mediaType === MediaType.MANGA ? 'Reading' : 'Watching'
     case MediaListStatus.PLANNING:
       return 'Planning'
     case MediaListStatus.COMPLETED:
@@ -599,7 +599,7 @@ export const getStatusLabel = (status: MediaListStatus): string => {
     case MediaListStatus.PAUSED:
       return 'Paused'
     case MediaListStatus.REPEATING:
-      return 'Rewatching'
+      return mediaType === MediaType.MANGA ? 'Re-reading' : 'Rewatching'
     default:
       return 'Unknown'
   }

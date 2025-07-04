@@ -105,15 +105,74 @@ export default function MediaListView({ client }: MediaListViewProps) {
         }))
     })
 
-    const statusCounts = {
-        ALL: baseLists.length,
-        [MediaListStatus.CURRENT]: baseLists.filter(e => e.status === MediaListStatus.CURRENT).length,
-        [MediaListStatus.PLANNING]: baseLists.filter(e => e.status === MediaListStatus.PLANNING).length,
-        [MediaListStatus.COMPLETED]: baseLists.filter(e => e.status === MediaListStatus.COMPLETED).length,
-        [MediaListStatus.DROPPED]: baseLists.filter(e => e.status === MediaListStatus.DROPPED).length,
-        [MediaListStatus.PAUSED]: baseLists.filter(e => e.status === MediaListStatus.PAUSED).length,
-        [MediaListStatus.REPEATING]: baseLists.filter(e => e.status === MediaListStatus.REPEATING).length,
+    // Calculate status counts based on filtered entries (excluding status filter)
+    const getFilteredStatusCounts = () => {
+        let lists = baseLists
+
+        // Apply all filters except status filter
+        if (filters.format && filters.format.length > 0) {
+            lists = lists.filter(entry =>
+                entry.media?.format && filters.format!.includes(entry.media.format)
+            )
+        }
+
+        if (filters.genre && filters.genre.length > 0) {
+            lists = lists.filter(entry =>
+                entry.media?.genres?.some(genre => filters.genre!.includes(genre))
+            )
+        }
+
+        if (filters.year) {
+            lists = lists.filter(entry => {
+                const year = entry.media?.startDate?.year || entry.media?.seasonYear
+                if (!year) return false
+                if (filters.year!.start && year < filters.year!.start) return false
+                if (filters.year!.end && year > filters.year!.end) return false
+                return true
+            })
+        }
+
+        if (filters.score) {
+            lists = lists.filter(entry => {
+                const score = entry.score || 0
+                if (filters.score!.min && score < filters.score!.min) return false
+                if (filters.score!.max && score > filters.score!.max) return false
+                return true
+            })
+        }
+
+        if (filters.search) {
+            const searchLower = filters.search.toLowerCase()
+            lists = lists.filter(entry => {
+                const title = entry.media?.title
+                return (
+                    title?.romaji?.toLowerCase().includes(searchLower) ||
+                    title?.english?.toLowerCase().includes(searchLower) ||
+                    title?.native?.toLowerCase().includes(searchLower) ||
+                    title?.userPreferred?.toLowerCase().includes(searchLower)
+                )
+            })
+        }
+
+        // Apply FilterPanel status filter (only if currentStatus is 'ALL')
+        if (currentStatus === 'ALL' && filters.status && filters.status.length > 0) {
+            lists = lists.filter(entry =>
+                entry.status && filters.status!.includes(entry.status)
+            )
+        }
+
+        return {
+            ALL: lists.length,
+            [MediaListStatus.CURRENT]: lists.filter(e => e.status === MediaListStatus.CURRENT).length,
+            [MediaListStatus.PLANNING]: lists.filter(e => e.status === MediaListStatus.PLANNING).length,
+            [MediaListStatus.COMPLETED]: lists.filter(e => e.status === MediaListStatus.COMPLETED).length,
+            [MediaListStatus.DROPPED]: lists.filter(e => e.status === MediaListStatus.DROPPED).length,
+            [MediaListStatus.PAUSED]: lists.filter(e => e.status === MediaListStatus.PAUSED).length,
+            [MediaListStatus.REPEATING]: lists.filter(e => e.status === MediaListStatus.REPEATING).length,
+        }
     }
+
+    const statusCounts = getFilteredStatusCounts()
 
     const handleQuickEdit = async (entryId: number, field: string, value: any) => {
         if (!client) return
@@ -313,7 +372,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                             : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
                             }`}
                     >
-                        {status === 'ALL' ? 'All' : getStatusLabel(status as MediaListStatus)} ({count})
+                        {status === 'ALL' ? 'All' : getStatusLabel(status as MediaListStatus, currentType)} ({count})
                     </button>
                 ))}
             </div>
@@ -381,7 +440,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                         {/* Status Badge */}
                                         {entry.status && (
                                             <div className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium ${getStatusColor(entry.status)} text-white`}>
-                                                {getStatusLabel(entry.status)}
+                                                {getStatusLabel(entry.status, currentType)}
                                             </div>
                                         )}
 
@@ -415,7 +474,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                                     >
                                                         {Object.values(MediaListStatus).map(status => (
                                                             <option key={status} value={status}>
-                                                                {getStatusLabel(status)}
+                                                                {getStatusLabel(status, currentType)}
                                                             </option>
                                                         ))}
                                                     </select>
@@ -535,7 +594,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                                         >
                                                             {Object.values(MediaListStatus).map(status => (
                                                                 <option key={status} value={status}>
-                                                                    {getStatusLabel(status)}
+                                                                    {getStatusLabel(status, currentType)}
                                                                 </option>
                                                             ))}
                                                         </select>
@@ -592,7 +651,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                                 <span>{formatProgress(entry)}</span>
                                                 {entry.status && (
                                                     <span className={`px-2 py-1 rounded text-xs ${getStatusColor(entry.status)} text-white`}>
-                                                        {getStatusLabel(entry.status)}
+                                                        {getStatusLabel(entry.status, currentType)}
                                                     </span>
                                                 )}
                                                 <span className="flex items-center gap-1">

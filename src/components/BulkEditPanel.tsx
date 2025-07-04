@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
-import { MediaListStatus } from '@/types/anilist'
+import { MediaListStatus, MediaType } from '@/types/anilist'
 import { getStatusLabel } from '@/lib/anilist'
 import { RateLimiter, RateLimiterStats } from '@/lib/rateLimiter'
 import {
@@ -29,6 +29,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         bulkEditMode,
         filteredEntries,
         user,
+        currentType,
         setBulkEditMode,
         selectAllEntries,
         clearSelection,
@@ -43,7 +44,8 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         score: '',
         progress: '',
         private: '',
-        notes: ''
+        notes: '',
+        customLists: {} as Record<string, boolean>
     })
     const [showAdvanced, setShowAdvanced] = useState(false)
     const [showRateLimitConfig, setShowRateLimitConfig] = useState(false)
@@ -82,6 +84,18 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
     const totalCount = filteredEntries.length
     const allSelected = selectedCount === totalCount && totalCount > 0
 
+    // Get available custom lists for the current type
+    const getAvailableCustomLists = () => {
+        if (!user?.mediaListOptions) return []
+
+        const currentTypeKey = currentType === MediaType.ANIME ? 'animeList' : 'mangaList'
+        const typeOptions = user.mediaListOptions[currentTypeKey]
+
+        return typeOptions?.customLists || []
+    }
+
+    const availableCustomLists = getAvailableCustomLists()
+
     const handleBulkOperation = async () => {
         if (!client || selectedCount === 0) return
 
@@ -94,7 +108,16 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         if (bulkOptions.private !== '') updates.private = bulkOptions.private === 'true'
         if (bulkOptions.notes.trim()) updates.notes = bulkOptions.notes
 
-        if (Object.keys(updates).length === 0) {
+        // Handle custom lists - convert to array format expected by API
+        const selectedCustomLists = Object.entries(bulkOptions.customLists)
+            .filter(([_, isSelected]) => isSelected)
+            .map(([listName, _]) => listName)
+
+        if (selectedCustomLists.length > 0) {
+            updates.customLists = selectedCustomLists
+        }
+
+        if (Object.keys(updates).length === 0 && selectedCustomLists.length === 0) {
             addNotification({
                 type: 'warning',
                 message: 'Please select at least one field to update'
@@ -164,7 +187,8 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                 score: '',
                 progress: '',
                 private: '',
-                notes: ''
+                notes: '',
+                customLists: {}
             })
             clearSelection()
             setBulkEditMode(false)
@@ -277,7 +301,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                     <option value="">No change</option>
                                     {Object.values(MediaListStatus).map(status => (
                                         <option key={status} value={status}>
-                                            {getStatusLabel(status)}
+                                            {getStatusLabel(status, currentType)}
                                         </option>
                                     ))}
                                 </select>
@@ -345,6 +369,40 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                 />
                             </div>
                         </div>
+
+                        {/* Custom Lists */}
+                        {availableCustomLists.length > 0 && (
+                            <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                <h5 className="font-medium text-gray-900 dark:text-white mb-3">
+                                    Custom Lists
+                                </h5>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                    {availableCustomLists.map(listName => (
+                                        <label key={listName} className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={bulkOptions.customLists[listName] || false}
+                                                onChange={(e) => setBulkOptions(prev => ({
+                                                    ...prev,
+                                                    customLists: {
+                                                        ...prev.customLists,
+                                                        [listName]: e.target.checked
+                                                    }
+                                                }))}
+                                                className="checkbox"
+                                            />
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                {listName}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    <strong>Note:</strong> Selected entries will be added to the checked custom lists.
+                                    To remove from custom lists, uncheck them (entries will be removed from those lists).
+                                </p>
+                            </div>
+                        )}
 
                         {/* Advanced Options Toggle */}
                         <button
