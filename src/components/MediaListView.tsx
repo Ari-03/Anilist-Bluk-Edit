@@ -204,12 +204,26 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                 setFilters({ sortOrder: newOrder })
                             }}
                             className="p-1 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-                            title={`Currently: ${filters.sortOrder === 'asc' ? 'A-Z' : 'Z-A'} (Click to ${filters.sortOrder === 'asc' ? 'reverse' : 'reset'})`}
+                            title={
+                                filters.sortBy === 'score'
+                                    ? `Currently: ${filters.sortOrder === 'asc' ? 'Low to High' : 'High to Low'} (Click to ${filters.sortOrder === 'asc' ? 'reverse' : 'reset'})`
+                                    : `Currently: ${filters.sortOrder === 'asc' ? 'A-Z' : 'Z-A'} (Click to ${filters.sortOrder === 'asc' ? 'reverse' : 'reset'})`
+                            }
                         >
-                            {filters.sortOrder === 'asc' ? (
-                                <ArrowDown className="w-4 h-4" />
+                            {filters.sortBy === 'score' ? (
+                                // For scores: up arrow = high scores, down arrow = low scores
+                                filters.sortOrder === 'asc' ? (
+                                    <ArrowUp className="w-4 h-4" />
+                                ) : (
+                                    <ArrowDown className="w-4 h-4" />
+                                )
                             ) : (
-                                <ArrowUp className="w-4 h-4" />
+                                // For titles: down arrow when asc (A-Z), up arrow when desc (Z-A)
+                                filters.sortOrder === 'asc' ? (
+                                    <ArrowDown className="w-4 h-4" />
+                                ) : (
+                                    <ArrowUp className="w-4 h-4" />
+                                )
                             )}
                         </button>
                     </div>
