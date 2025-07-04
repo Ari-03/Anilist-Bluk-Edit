@@ -129,7 +129,10 @@ const initialState: AppState = {
     selectedEntries: new Set(),
     bulkEditMode: false,
     bulkEditOptions: null,
-    filters: {},
+    filters: {
+        sortBy: 'title',
+        sortOrder: 'asc'
+    },
     filteredEntries: [],
     isLoading: false,
     error: null,
@@ -161,12 +164,32 @@ export const useStore = create<AppState & AppActions>()(
                 // Media list actions
                 setAnimeLists: (animeLists) => {
                     console.log('Setting anime lists:', animeLists.length, 'entries')
+
+                    // Check for duplicates in source data
+                    const ids = animeLists.map(entry => entry.id)
+                    const uniqueIds = new Set(ids)
+                    if (ids.length !== uniqueIds.size) {
+                        console.warn('🚨 Duplicate anime entries detected in source data')
+                        const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index)
+                        console.warn('Duplicate anime IDs:', duplicateIds)
+                    }
+
                     set({ animeLists })
                     // Apply filters immediately after state update
                     get().applyFilters()
                 },
                 setMangaLists: (mangaLists) => {
                     console.log('Setting manga lists:', mangaLists.length, 'entries')
+
+                    // Check for duplicates in source data
+                    const ids = mangaLists.map(entry => entry.id)
+                    const uniqueIds = new Set(ids)
+                    if (ids.length !== uniqueIds.size) {
+                        console.warn('🚨 Duplicate manga entries detected in source data')
+                        const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index)
+                        console.warn('Duplicate manga IDs:', duplicateIds)
+                    }
+
                     set({ mangaLists })
                     // Apply filters immediately after state update
                     get().applyFilters()
@@ -271,12 +294,13 @@ export const useStore = create<AppState & AppActions>()(
 
                 // Filter actions
                 setFilters: (newFilters) => {
-                    const filters = { ...get().filters, ...newFilters }
+                    const currentFilters = get().filters
+                    const filters = { ...currentFilters, ...newFilters }
                     set({ filters })
                     get().applyFilters()
                 },
                 clearFilters: () => {
-                    set({ filters: {} })
+                    set({ filters: { sortBy: 'title', sortOrder: 'asc' } })
                     get().applyFilters()
                 },
                 applyFilters: () => {
@@ -290,6 +314,8 @@ export const useStore = create<AppState & AppActions>()(
                         currentStatus,
                         totalLists: lists.length,
                         filters,
+                        sortBy: filters.sortBy || 'title',
+                        sortOrder: filters.sortOrder || 'asc',
                         listsPreview: lists.slice(0, 2).map(e => ({
                             id: e.id,
                             title: e.media?.title?.userPreferred,
@@ -356,44 +382,133 @@ export const useStore = create<AppState & AppActions>()(
                         })
                     }
 
-                    // Apply sorting
-                    if (filters.sortBy) {
+                    // Apply sorting with special handling for 'ALL' status
+                    if (currentStatus === 'ALL') {
+                        // Define status order: Watching, Planning, Completed, Dropped, Paused, Rewatching
+                        const statusOrder = {
+                            [MediaListStatus.CURRENT]: 0,     // Watching
+                            [MediaListStatus.PLANNING]: 1,    // Planning
+                            [MediaListStatus.COMPLETED]: 2,   // Completed
+                            [MediaListStatus.DROPPED]: 3,     // Dropped
+                            [MediaListStatus.PAUSED]: 4,      // Paused
+                            [MediaListStatus.REPEATING]: 5,   // Rewatching
+                        }
+
                         lists.sort((a, b) => {
-                            let aValue: any, bValue: any
+                            // First, sort by status
+                            const aStatusOrder = statusOrder[a.status as MediaListStatus] ?? 999
+                            const bStatusOrder = statusOrder[b.status as MediaListStatus] ?? 999
 
-                            switch (filters.sortBy) {
-                                case 'title':
-                                    aValue = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
-                                    bValue = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
-                                    break
-                                case 'score':
-                                    aValue = a.score || 0
-                                    bValue = b.score || 0
-                                    break
-                                case 'progress':
-                                    aValue = a.progress || 0
-                                    bValue = b.progress || 0
-                                    break
-                                case 'startDate':
-                                    aValue = a.startedAt?.year || 0
-                                    bValue = b.startedAt?.year || 0
-                                    break
-                                case 'updatedAt':
-                                    aValue = a.updatedAt || 0
-                                    bValue = b.updatedAt || 0
-                                    break
-                                default:
-                                    return 0
+                            if (aStatusOrder !== bStatusOrder) {
+                                return aStatusOrder - bStatusOrder
                             }
 
-                            if (typeof aValue === 'string') {
-                                const comparison = aValue.localeCompare(bValue)
-                                return filters.sortOrder === 'desc' ? -comparison : comparison
-                            } else {
-                                const comparison = aValue - bValue
-                                return filters.sortOrder === 'desc' ? -comparison : comparison
+                            // Within same status, sort by the selected criteria
+                            const sortBy = filters.sortBy || 'title'
+                            const sortOrder = filters.sortOrder || 'asc'
+                            if (sortBy) {
+                                let aValue: any, bValue: any
+
+                                switch (sortBy) {
+                                    case 'title':
+                                        aValue = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
+                                        bValue = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
+                                        break
+                                    case 'score':
+                                        aValue = a.score || 0
+                                        bValue = b.score || 0
+                                        break
+                                    case 'progress':
+                                        aValue = a.progress || 0
+                                        bValue = b.progress || 0
+                                        break
+                                    case 'startDate':
+                                        aValue = a.startedAt?.year || 0
+                                        bValue = b.startedAt?.year || 0
+                                        break
+                                    case 'updatedAt':
+                                        aValue = a.updatedAt || 0
+                                        bValue = b.updatedAt || 0
+                                        break
+                                    default:
+                                        return 0
+                                }
+
+                                if (typeof aValue === 'string') {
+                                    const comparison = aValue.localeCompare(bValue)
+                                    return sortOrder === 'desc' ? -comparison : comparison
+                                } else {
+                                    const comparison = aValue - bValue
+                                    return sortOrder === 'desc' ? -comparison : comparison
+                                }
                             }
+
+                            return 0
                         })
+                    } else {
+                        // Regular sorting for specific status views
+                        const sortBy = filters.sortBy || 'title'
+                        const sortOrder = filters.sortOrder || 'asc'
+                        if (sortBy) {
+                            lists.sort((a, b) => {
+                                let aValue: any, bValue: any
+
+                                switch (sortBy) {
+                                    case 'title':
+                                        aValue = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
+                                        bValue = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
+                                        break
+                                    case 'score':
+                                        aValue = a.score || 0
+                                        bValue = b.score || 0
+                                        break
+                                    case 'progress':
+                                        aValue = a.progress || 0
+                                        bValue = b.progress || 0
+                                        break
+                                    case 'startDate':
+                                        aValue = a.startedAt?.year || 0
+                                        bValue = b.startedAt?.year || 0
+                                        break
+                                    case 'updatedAt':
+                                        aValue = a.updatedAt || 0
+                                        bValue = b.updatedAt || 0
+                                        break
+                                    default:
+                                        return 0
+                                }
+
+                                if (typeof aValue === 'string') {
+                                    const comparison = aValue.localeCompare(bValue)
+                                    return sortOrder === 'desc' ? -comparison : comparison
+                                } else {
+                                    const comparison = aValue - bValue
+                                    return sortOrder === 'desc' ? -comparison : comparison
+                                }
+                            })
+                        }
+                    }
+
+                    // Check for and remove duplicates before setting filteredEntries
+                    const duplicateCheck = new Map()
+                    const duplicates: number[] = []
+                    lists.forEach(entry => {
+                        if (duplicateCheck.has(entry.id)) {
+                            duplicates.push(entry.id)
+                        } else {
+                            duplicateCheck.set(entry.id, entry)
+                        }
+                    })
+
+                    if (duplicates.length > 0) {
+                        console.warn('🚨 Found duplicate entries with IDs:', duplicates)
+                        // Remove duplicates by using Map to keep only unique entries by ID
+                        const uniqueMap = new Map()
+                        lists.forEach(entry => {
+                            uniqueMap.set(entry.id, entry)
+                        })
+                        lists = Array.from(uniqueMap.values())
+                        console.log('✅ Removed duplicates, new count:', lists.length)
                     }
 
                     console.log('Final filtered entries:', lists.length)

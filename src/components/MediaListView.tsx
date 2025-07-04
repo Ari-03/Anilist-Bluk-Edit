@@ -14,7 +14,10 @@ import {
     Edit3,
     Trash2,
     Check,
-    X
+    X,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown
 } from 'lucide-react'
 
 interface MediaListViewProps {
@@ -31,8 +34,10 @@ export default function MediaListView({ client }: MediaListViewProps) {
         bulkEditMode,
         animeLists,
         mangaLists,
+        filters,
         setCurrentType,
         setCurrentStatus,
+        setFilters,
         toggleEntrySelection,
         updateMediaListEntry,
         addNotification,
@@ -54,7 +59,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
         if (animeLists.length > 0 || mangaLists.length > 0) {
             applyFilters()
         }
-    }, [currentType, currentStatus, animeLists.length, mangaLists.length, applyFilters])
+    }, [currentType, currentStatus, animeLists.length, mangaLists.length, filters.sortBy, filters.sortOrder, applyFilters])
 
     // Simple debug to check if we have entries and scores
     useEffect(() => {
@@ -179,28 +184,59 @@ export default function MediaListView({ client }: MediaListViewProps) {
                     </button>
                 </div>
 
-                {/* View Mode Toggle */}
-                <div className="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
-                    <button
-                        onClick={() => setViewMode('grid')}
-                        className={`p-2 rounded-md transition-colors ${viewMode === 'grid'
-                            ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                        title="Grid View"
-                    >
-                        <Grid3X3 className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => setViewMode('list')}
-                        className={`p-2 rounded-md transition-colors ${viewMode === 'list'
-                            ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                        title="List View"
-                    >
-                        <List className="w-4 h-4" />
-                    </button>
+                {/* Controls Container */}
+                <div className="flex items-center gap-4">
+                    {/* Sort Controls */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Sort by:</span>
+                        <select
+                            value={filters.sortBy || 'title'}
+                            onChange={(e) => setFilters({ sortBy: e.target.value as 'title' | 'score' })}
+                            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="title">Title</option>
+                            <option value="score">Score</option>
+                        </select>
+
+                        <button
+                            onClick={() => {
+                                const newOrder = filters.sortOrder === 'asc' ? 'desc' : 'asc'
+                                setFilters({ sortOrder: newOrder })
+                            }}
+                            className="p-1 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                            title={`Currently: ${filters.sortOrder === 'asc' ? 'A-Z' : 'Z-A'} (Click to ${filters.sortOrder === 'asc' ? 'reverse' : 'reset'})`}
+                        >
+                            {filters.sortOrder === 'asc' ? (
+                                <ArrowDown className="w-4 h-4" />
+                            ) : (
+                                <ArrowUp className="w-4 h-4" />
+                            )}
+                        </button>
+                    </div>
+
+                    {/* View Mode Toggle */}
+                    <div className="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={`p-2 rounded-md transition-colors ${viewMode === 'grid'
+                                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            title="Grid View"
+                        >
+                            <Grid3X3 className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`p-2 rounded-md transition-colors ${viewMode === 'list'
+                                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            title="List View"
+                        >
+                            <List className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
 
