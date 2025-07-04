@@ -439,6 +439,12 @@ export const useStore = create<AppState & AppActions>()(
                                     return sortOrder === 'desc' ? -comparison : comparison
                                 } else {
                                     const comparison = aValue - bValue
+                                    // If sorting by score and scores are equal, sort alphabetically by title
+                                    if (sortBy === 'score' && comparison === 0) {
+                                        const aTitle = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
+                                        const bTitle = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
+                                        return aTitle.localeCompare(bTitle)
+                                    }
                                     return sortOrder === 'desc' ? -comparison : comparison
                                 }
                             }
@@ -483,6 +489,12 @@ export const useStore = create<AppState & AppActions>()(
                                     return sortOrder === 'desc' ? -comparison : comparison
                                 } else {
                                     const comparison = aValue - bValue
+                                    // If sorting by score and scores are equal, sort alphabetically by title
+                                    if (sortBy === 'score' && comparison === 0) {
+                                        const aTitle = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
+                                        const bTitle = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
+                                        return aTitle.localeCompare(bTitle)
+                                    }
                                     return sortOrder === 'desc' ? -comparison : comparison
                                 }
                             })

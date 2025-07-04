@@ -140,6 +140,22 @@ export default function MediaListView({ client }: MediaListViewProps) {
         return max ? `${current}/${max}` : current.toString()
     }
 
+    const formatScore = (entry: any) => {
+        // In AniList, a score of 0 typically means "not scored"
+        // Only show actual scores (greater than 0)
+        const scoreExists = entry.score !== null && entry.score !== undefined && entry.score > 0;
+
+        if (scoreExists) {
+            // Just show the score as-is since AniList API returns it in the user's preferred format
+            return entry.score.toString()
+        }
+        return '-'
+    }
+
+    const hasScore = (entry: any) => {
+        return entry.score !== null && entry.score !== undefined && entry.score > 0
+    }
+
     const handleTypeChange = (type: MediaType) => {
         console.log('Button clicked - changing type to:', type)
         setCurrentType(type)
@@ -324,16 +340,12 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                         )}
 
                                         {/* Score */}
-                                        {(entry.score || entry.score === 0) && (
-                                            <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 rounded px-2 py-1">
-                                                <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                                                <span className="text-white text-xs">
-                                                    {user?.mediaListOptions?.scoreFormat
-                                                        ? getScoreDisplay(entry.score, user.mediaListOptions.scoreFormat)
-                                                        : entry.score}
-                                                </span>
-                                            </div>
-                                        )}
+                                        <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 rounded px-2 py-1">
+                                            <Star className={`w-3 h-3 fill-current ${hasScore(entry) ? 'text-yellow-400' : 'text-gray-400'}`} />
+                                            <span className={`text-xs ${hasScore(entry) ? 'text-white' : 'text-gray-300'}`}>
+                                                {formatScore(entry)}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     {/* Content */}
@@ -381,14 +393,12 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                                     {getStatusLabel(entry.status)}
                                                 </span>
                                             )}
-                                            {(entry.score || entry.score === 0) && (
-                                                <span className="flex items-center gap-1">
-                                                    <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                                                    {user?.mediaListOptions?.scoreFormat
-                                                        ? getScoreDisplay(entry.score, user.mediaListOptions.scoreFormat)
-                                                        : entry.score}
+                                            <span className="flex items-center gap-1">
+                                                <Star className={`w-3 h-3 fill-current ${hasScore(entry) ? 'text-yellow-400' : 'text-gray-400'}`} />
+                                                <span className={hasScore(entry) ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}>
+                                                    {formatScore(entry)}
                                                 </span>
-                                            )}
+                                            </span>
                                         </div>
                                     </div>
 
