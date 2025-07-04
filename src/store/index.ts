@@ -44,6 +44,7 @@ interface AppState {
     animeLists: MediaList[]
     mangaLists: MediaList[]
     isLoadingLists: boolean
+    lastDataLoad: number | null // Timestamp of last successful data load
 
     // Current view
     currentType: MediaType
@@ -84,6 +85,8 @@ interface AppActions {
     updateMediaListEntry: (entry: MediaList) => void
     removeMediaListEntry: (id: number) => void
     setIsLoadingLists: (loading: boolean) => void
+    setLastDataLoad: (timestamp: number) => void
+    shouldReloadData: () => boolean
 
     // View actions
     setCurrentType: (type: MediaType) => void
@@ -120,6 +123,7 @@ const initialState: AppState = {
     animeLists: [],
     mangaLists: [],
     isLoadingLists: false,
+    lastDataLoad: null,
     currentType: MediaType.ANIME,
     currentStatus: 'ALL',
     selectedEntries: new Set(),
@@ -147,6 +151,7 @@ export const useStore = create<AppState & AppActions>()(
                     accessToken: null,
                     animeLists: [],
                     mangaLists: [],
+                    lastDataLoad: null,
                     selectedEntries: new Set(),
                     bulkEditMode: false,
                     bulkEditOptions: null,
@@ -195,6 +200,32 @@ export const useStore = create<AppState & AppActions>()(
                     get().applyFilters()
                 },
                 setIsLoadingLists: (isLoadingLists) => set({ isLoadingLists }),
+                setLastDataLoad: (lastDataLoad) => set({ lastDataLoad }),
+                shouldReloadData: () => {
+                    const state = get()
+                    // Check if we have data in current session and if it's fresh
+                    const hasDataInMemory = state.animeLists.length > 0 && state.mangaLists.length > 0
+                    const hasTimestamp = state.lastDataLoad !== null
+
+                    if (hasDataInMemory && hasTimestamp) {
+                        const fiveMinutes = 5 * 60 * 1000 // Reduced from 1 hour to 5 minutes for better UX
+                        const isDataFresh = Date.now() - state.lastDataLoad! < fiveMinutes
+                        console.log('shouldReloadData check:', {
+                            hasDataInMemory,
+                            hasTimestamp,
+                            lastDataLoad: state.lastDataLoad,
+                            isDataFresh,
+                            timeSinceLoad: state.lastDataLoad ? Date.now() - state.lastDataLoad : 'never'
+                        })
+                        return !isDataFresh
+                    }
+
+                    console.log('shouldReloadData: true (no data or timestamp)', {
+                        hasDataInMemory,
+                        hasTimestamp
+                    })
+                    return true
+                },
 
                 // View actions
                 setCurrentType: (currentType) => {
@@ -418,12 +449,14 @@ export const useStore = create<AppState & AppActions>()(
             {
                 name: 'anilist-bulk-edit-store',
                 partialize: (state) => ({
-                    // Only persist user data, access token, and preferences
+                    // Only persist essential data to avoid quota exceeded errors
                     user: state.user,
                     accessToken: state.accessToken,
                     darkMode: state.darkMode,
                     currentType: state.currentType,
                     filters: state.filters,
+                    lastDataLoad: state.lastDataLoad,
+                    // Don't persist large arrays to avoid localStorage quota issues
                 }),
             }
         ),

@@ -18,6 +18,8 @@ export default function Home() {
         darkMode,
         currentType,
         isLoadingLists,
+        animeLists,
+        mangaLists,
         setUser,
         setAccessToken,
         setAnimeLists,
@@ -26,6 +28,8 @@ export default function Home() {
         setError,
         addNotification,
         toggleDarkMode,
+        setLastDataLoad,
+        shouldReloadData,
     } = useStore()
 
     const [client, setClient] = useState<AniListClient | null>(null)
@@ -47,7 +51,27 @@ export default function Home() {
                 return
             }
 
-            console.log('Loading user data...', { hasUser: !!user })
+            // Check if we should reload data
+            if (!shouldReloadData()) {
+                console.log('Data is fresh, skipping reload. Current data:', {
+                    animeCount: animeLists.length,
+                    mangaCount: mangaLists.length
+                })
+
+                // Still set user if we don't have it but have data
+                if (!user && (animeLists.length > 0 || mangaLists.length > 0)) {
+                    try {
+                        const userData = await client.getCurrentUser()
+                        setUser(userData)
+                        console.log('Updated user data without reloading lists')
+                    } catch (error) {
+                        console.error('Failed to load user data:', error)
+                    }
+                }
+                return
+            }
+
+            console.log('Loading user data...', { hasUser: !!user, shouldReload: shouldReloadData() })
 
             try {
                 setIsLoadingLists(true)
@@ -58,18 +82,19 @@ export default function Home() {
                 setUser(userData)
 
                 // Load both anime and manga lists
-                const [animeLists, mangaLists] = await Promise.all([
+                const [animeListsData, mangaListsData] = await Promise.all([
                     client.getAllMediaLists(userData.id, MediaType.ANIME),
                     client.getAllMediaLists(userData.id, MediaType.MANGA),
                 ])
 
-                console.log('Loaded lists:', { anime: animeLists.length, manga: mangaLists.length })
-                setAnimeLists(animeLists)
-                setMangaLists(mangaLists)
+                console.log('Loaded lists:', { anime: animeListsData.length, manga: mangaListsData.length })
+                setAnimeLists(animeListsData)
+                setMangaLists(mangaListsData)
+                setLastDataLoad(Date.now())
 
                 addNotification({
                     type: 'success',
-                    message: `Welcome back, ${userData.name}! Loaded ${animeLists.length} anime and ${mangaLists.length} manga entries.`,
+                    message: `Welcome back, ${userData.name}! Loaded ${animeListsData.length} anime and ${mangaListsData.length} manga entries.`,
                 })
             } catch (error) {
                 console.error('Failed to load user data:', error)
@@ -84,7 +109,7 @@ export default function Home() {
         }
 
         loadUserData()
-    }, [client, session?.accessToken])
+    }, [client, session?.accessToken, shouldReloadData])
 
     // Apply dark mode class to document
     useEffect(() => {
@@ -194,6 +219,22 @@ export default function Home() {
                             </div>
 
                             <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        if (client && session?.accessToken) {
+                                            // Force reload by clearing timestamp
+                                            setLastDataLoad(0)
+                                            // The useEffect will trigger on next render
+                                            setTimeout(() => window.location.reload(), 100)
+                                        }
+                                    }}
+                                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 
+                            hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    title="Refresh media lists"
+                                >
+                                    <Settings className="w-5 h-5" />
+                                </button>
+
                                 <button
                                     onClick={toggleDarkMode}
                                     className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 
