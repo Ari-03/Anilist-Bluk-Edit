@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { MediaListStatus } from '@/types/anilist'
 import { getStatusLabel } from '@/lib/anilist'
+import { RateLimiter, RateLimiterStats } from '@/lib/rateLimiter'
 import {
     Edit3,
     CheckSquare,
@@ -11,7 +12,11 @@ import {
     Save,
     X,
     Loader2,
-    AlertCircle
+    AlertCircle,
+    Settings,
+    Activity,
+    Clock,
+    Zap
 } from 'lucide-react'
 
 interface BulkEditPanelProps {
@@ -41,7 +46,17 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         notes: ''
     })
     const [showAdvanced, setShowAdvanced] = useState(false)
+    const [showRateLimitConfig, setShowRateLimitConfig] = useState(false)
     const [processProgress, setProcessProgress] = useState({ current: 0, total: 0 })
+    const [rateLimiterStats, setRateLimiterStats] = useState<RateLimiterStats | null>(null)
+    const [rateLimiterConfig, setRateLimiterConfig] = useState({
+        maxRequestsPerSecond: 0.5, // Conservative for current 30 req/min limit
+        maxConcurrentRequests: 2,
+        maxRetries: 3,
+        initialRetryDelay: 2000
+    })
+
+    const rateLimiterRef = useRef<RateLimiter | null>(null)
 
     const selectedCount = selectedEntries.size
     const totalCount = filteredEntries.length
@@ -70,50 +85,57 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         setIsProcessing(true)
         setProcessProgress({ current: 0, total: selectedCount })
 
+        // Initialize rate limiter with current config
+        rateLimiterRef.current = new RateLimiter(rateLimiterConfig)
+
         try {
             const selectedMediaLists = getSelectedEntries()
-            const updatePromises = selectedMediaLists.map(async (entry, index) => {
+            const results = []
+
+            addNotification({
+                type: 'info',
+                message: `Starting bulk update of ${selectedCount} entries with rate limiting...`
+            })
+
+            // Process each update through the rate limiter
+            for (const entry of selectedMediaLists) {
                 try {
                     // Validate progress if being updated
-                    if (updates.progress !== undefined) {
+                    const entryUpdates = { ...updates }
+                    if (entryUpdates.progress !== undefined) {
                         const maxProgress = entry.media?.episodes || entry.media?.chapters
-                        if (maxProgress && updates.progress > maxProgress) {
-                            updates.progress = maxProgress
+                        if (maxProgress && entryUpdates.progress > maxProgress) {
+                            entryUpdates.progress = maxProgress
                         }
                     }
 
-                    const result = await client.updateMediaListEntry(entry.mediaId, updates)
+                    const result = await rateLimiterRef.current.execute(async () => {
+                        return await client.updateMediaListEntry(entry.mediaId, entryUpdates)
+                    })
+
                     updateMediaListEntry(result)
+                    results.push({ status: 'fulfilled', value: result })
                     setProcessProgress(prev => ({ ...prev, current: prev.current + 1 }))
-                    return result
+
+                    // Update stats display
+                    setRateLimiterStats(rateLimiterRef.current.getStats())
+
                 } catch (error) {
                     console.error(`Failed to update entry ${entry.id}:`, error)
+                    results.push({ status: 'rejected', reason: error })
                     setProcessProgress(prev => ({ ...prev, current: prev.current + 1 }))
-                    throw error
-                }
-            })
-
-            // Process updates with batching
-            const batchSize = 5
-            const results = []
-
-            for (let i = 0; i < updatePromises.length; i += batchSize) {
-                const batch = updatePromises.slice(i, i + batchSize)
-                const batchResults = await Promise.allSettled(batch)
-                results.push(...batchResults)
-
-                // Add delay between batches to respect rate limits
-                if (i + batchSize < updatePromises.length) {
-                    await new Promise(resolve => setTimeout(resolve, 1000))
                 }
             }
 
             const successful = results.filter(r => r.status === 'fulfilled').length
             const failed = results.filter(r => r.status === 'rejected').length
 
+            const finalStats = rateLimiterRef.current.getStats()
+            setRateLimiterStats(finalStats)
+
             addNotification({
                 type: successful > 0 ? 'success' : 'error',
-                message: `Bulk update completed: ${successful} successful, ${failed} failed`
+                message: `Bulk update completed: ${successful} successful, ${failed} failed. Rate limit hits: ${finalStats.rateLimitHits}, Retries: ${finalStats.retriedRequests}`
             })
 
             // Reset form and selection
@@ -311,13 +333,158 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
 
                         {showAdvanced && (
                             <div className="border-t border-gray-200 dark:border-gray-600 pt-4 space-y-4">
-                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-                                    <div className="flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                                        <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                                            Advanced options will be added in future versions
-                                        </p>
+                                {/* Rate Limiter Configuration */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <h5 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                            <Zap className="w-4 h-4" />
+                                            Rate Limiting Configuration
+                                        </h5>
+                                        <button
+                                            onClick={() => setShowRateLimitConfig(!showRateLimitConfig)}
+                                            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                                        >
+                                            {showRateLimitConfig ? 'Hide' : 'Show'} Config
+                                        </button>
                                     </div>
+
+                                    {showRateLimitConfig && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Max Requests/Second
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={rateLimiterConfig.maxRequestsPerSecond}
+                                                    onChange={(e) => setRateLimiterConfig(prev => ({
+                                                        ...prev,
+                                                        maxRequestsPerSecond: Math.max(0.1, parseFloat(e.target.value) || 0.1)
+                                                    }))}
+                                                    min="0.1"
+                                                    max="0.5"
+                                                    step="0.1"
+                                                    className="input text-sm"
+                                                    disabled={isProcessing}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Max Concurrent Requests
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={rateLimiterConfig.maxConcurrentRequests}
+                                                    onChange={(e) => setRateLimiterConfig(prev => ({
+                                                        ...prev,
+                                                        maxConcurrentRequests: Math.max(1, parseInt(e.target.value) || 1)
+                                                    }))}
+                                                    min="1"
+                                                    max="3"
+                                                    className="input text-sm"
+                                                    disabled={isProcessing}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Max Retries
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={rateLimiterConfig.maxRetries}
+                                                    onChange={(e) => setRateLimiterConfig(prev => ({
+                                                        ...prev,
+                                                        maxRetries: Math.max(0, parseInt(e.target.value) || 0)
+                                                    }))}
+                                                    min="0"
+                                                    max="10"
+                                                    className="input text-sm"
+                                                    disabled={isProcessing}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Initial Retry Delay (ms)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={rateLimiterConfig.initialRetryDelay}
+                                                    onChange={(e) => setRateLimiterConfig(prev => ({
+                                                        ...prev,
+                                                        initialRetryDelay: Math.max(100, parseInt(e.target.value) || 100)
+                                                    }))}
+                                                    min="100"
+                                                    max="10000"
+                                                    step="100"
+                                                    className="input text-sm"
+                                                    disabled={isProcessing}
+                                                />
+                                            </div>
+
+                                            <div className="sm:col-span-2">
+                                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                                                            <strong>Note:</strong> AniList is currently limited to <strong>30 requests per minute</strong> (degraded state).
+                                                            Normal limit is 90/min. Lower values are safer but slower.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Rate Limiter Stats */}
+                                    {rateLimiterStats && (
+                                        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                                            <h6 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                                <Activity className="w-4 h-4" />
+                                                Rate Limiter Statistics
+                                            </h6>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                                                <div>
+                                                    <div className="text-gray-500 dark:text-gray-400">Total Requests</div>
+                                                    <div className="font-medium">{rateLimiterStats.totalRequests}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-gray-500 dark:text-gray-400">Successful</div>
+                                                    <div className="font-medium text-green-600">{rateLimiterStats.successfulRequests}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-gray-500 dark:text-gray-400">Failed</div>
+                                                    <div className="font-medium text-red-600">{rateLimiterStats.failedRequests}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-gray-500 dark:text-gray-400">Rate Limit Hits</div>
+                                                    <div className="font-medium text-orange-600">{rateLimiterStats.rateLimitHits}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-gray-500 dark:text-gray-400">Retries</div>
+                                                    <div className="font-medium text-yellow-600">{rateLimiterStats.retriedRequests}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-gray-500 dark:text-gray-400">Avg Response Time</div>
+                                                    <div className="font-medium">{Math.round(rateLimiterStats.averageResponseTime)}ms</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-gray-500 dark:text-gray-400">Queue Size</div>
+                                                    <div className="font-medium">{rateLimiterStats.currentQueueSize}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-gray-500 dark:text-gray-400">Success Rate</div>
+                                                    <div className="font-medium">
+                                                        {rateLimiterStats.totalRequests > 0
+                                                            ? Math.round((rateLimiterStats.successfulRequests / rateLimiterStats.totalRequests) * 100)
+                                                            : 0}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -327,8 +494,14 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                     {isProcessing && (
                         <div className="space-y-2">
                             <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-600 dark:text-gray-400">
+                                <span className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                                    <Clock className="w-4 h-4" />
                                     Processing... ({processProgress.current}/{processProgress.total})
+                                    {rateLimiterStats && rateLimiterStats.currentQueueSize > 0 && (
+                                        <span className="text-orange-600 dark:text-orange-400">
+                                            • Queue: {rateLimiterStats.currentQueueSize}
+                                        </span>
+                                    )}
                                 </span>
                                 <span className="text-gray-600 dark:text-gray-400">
                                     {processProgress.total > 0 ? Math.round((processProgress.current / processProgress.total) * 100) : 0}%
@@ -344,6 +517,15 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                     }}
                                 />
                             </div>
+                            {rateLimiterStats && (
+                                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                                    <span>Success: {rateLimiterStats.successfulRequests}</span>
+                                    <span>Failed: {rateLimiterStats.failedRequests}</span>
+                                    <span>Rate Limits: {rateLimiterStats.rateLimitHits}</span>
+                                    <span>Retries: {rateLimiterStats.retriedRequests}</span>
+                                    <span>Avg Time: {Math.round(rateLimiterStats.averageResponseTime)}ms</span>
+                                </div>
+                            )}
                         </div>
                     )}
 
