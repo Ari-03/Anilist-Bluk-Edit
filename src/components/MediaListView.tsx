@@ -52,7 +52,29 @@ export default function MediaListView({ client }: MediaListViewProps) {
         status?: MediaListStatus
         score?: number
         progress?: number
+        notes?: string
     }>({})
+
+    // Get score range based on user's score format
+    const getScoreRange = () => {
+        const scoreFormat = user?.mediaListOptions?.scoreFormat
+        switch (scoreFormat) {
+            case 'POINT_100':
+                return { min: 0, max: 100, step: 1 }
+            case 'POINT_10_DECIMAL':
+                return { min: 0, max: 10, step: 0.1 }
+            case 'POINT_10':
+                return { min: 0, max: 10, step: 1 }
+            case 'POINT_5':
+                return { min: 0, max: 5, step: 1 }
+            case 'POINT_3':
+                return { min: 0, max: 3, step: 1 }
+            default:
+                return { min: 0, max: 10, step: 1 } // Default to 10-point scale
+        }
+    }
+
+    const scoreRange = getScoreRange()
 
     // Ensure filters are applied when dependencies change
     useEffect(() => {
@@ -111,6 +133,16 @@ export default function MediaListView({ client }: MediaListViewProps) {
                 message: `Failed to update ${field}`
             })
         }
+    }
+
+    const handleStartEdit = (entry: any) => {
+        setEditingEntry(entry.id)
+        setEditValues({
+            status: entry.status,
+            score: entry.score || 0,
+            progress: entry.progress || 0,
+            notes: entry.notes || ''
+        })
     }
 
     const handleSaveEdit = async (entryId: number) => {
@@ -368,16 +400,103 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                             {entry.media?.title?.userPreferred || entry.media?.title?.romaji}
                                         </h3>
 
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                                            <div className="flex items-center gap-1">
-                                                {currentType === MediaType.ANIME ? <Play className="w-3 h-3" /> : <Book className="w-3 h-3" />}
-                                                <span>{formatProgress(entry)}</span>
-                                            </div>
+                                        {editingEntry === entry.id ? (
+                                            // Edit Form for Grid View
+                                            <div className="mt-2 space-y-2">
+                                                {/* Status */}
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Status
+                                                    </label>
+                                                    <select
+                                                        value={editValues.status || ''}
+                                                        onChange={(e) => setEditValues(prev => ({ ...prev, status: e.target.value as MediaListStatus }))}
+                                                        className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    >
+                                                        {Object.values(MediaListStatus).map(status => (
+                                                            <option key={status} value={status}>
+                                                                {getStatusLabel(status)}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
 
-                                            {entry.media?.format && (
-                                                <div>{entry.media.format}</div>
-                                            )}
-                                        </div>
+                                                {/* Score */}
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Score
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        value={editValues.score || ''}
+                                                        onChange={(e) => setEditValues(prev => ({ ...prev, score: parseFloat(e.target.value) || 0 }))}
+                                                        min={scoreRange.min}
+                                                        max={scoreRange.max}
+                                                        step={scoreRange.step}
+                                                        className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    />
+                                                </div>
+
+                                                {/* Progress */}
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Progress
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        value={editValues.progress || ''}
+                                                        onChange={(e) => setEditValues(prev => ({ ...prev, progress: parseInt(e.target.value) || 0 }))}
+                                                        min="0"
+                                                        max={entry.media?.episodes || entry.media?.chapters || 999}
+                                                        className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    />
+                                                </div>
+
+                                                {/* Edit Actions */}
+                                                <div className="flex justify-end gap-2 mt-2">
+                                                    <button
+                                                        onClick={() => handleSaveEdit(entry.id)}
+                                                        className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                                        title="Save"
+                                                    >
+                                                        <Check className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingEntry(null)
+                                                            setEditValues({})
+                                                        }}
+                                                        className="p-1 text-gray-600 hover:bg-gray-50 rounded"
+                                                        title="Cancel"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            // Normal Display for Grid View
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                                                <div className="flex items-center gap-1">
+                                                    {currentType === MediaType.ANIME ? <Play className="w-3 h-3" /> : <Book className="w-3 h-3" />}
+                                                    <span>{formatProgress(entry)}</span>
+                                                </div>
+
+                                                {entry.media?.format && (
+                                                    <div>{entry.media.format}</div>
+                                                )}
+
+                                                {/* Edit Button for Grid View */}
+                                                <div className="flex justify-end mt-2">
+                                                    <button
+                                                        onClick={() => handleStartEdit(entry)}
+                                                        className="p-1 text-gray-600 hover:bg-gray-50 rounded"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit3 className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ) : (
@@ -400,20 +519,90 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                             {entry.media?.title?.userPreferred || entry.media?.title?.romaji}
                                         </h3>
 
-                                        <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                            <span>{formatProgress(entry)}</span>
-                                            {entry.status && (
-                                                <span className={`px-2 py-1 rounded text-xs ${getStatusColor(entry.status)} text-white`}>
-                                                    {getStatusLabel(entry.status)}
+                                        {editingEntry === entry.id ? (
+                                            // Edit Form
+                                            <div className="mt-2 space-y-3">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {/* Status */}
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                            Status
+                                                        </label>
+                                                        <select
+                                                            value={editValues.status || ''}
+                                                            onChange={(e) => setEditValues(prev => ({ ...prev, status: e.target.value as MediaListStatus }))}
+                                                            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        >
+                                                            {Object.values(MediaListStatus).map(status => (
+                                                                <option key={status} value={status}>
+                                                                    {getStatusLabel(status)}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    {/* Score */}
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                            Score
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            value={editValues.score || ''}
+                                                            onChange={(e) => setEditValues(prev => ({ ...prev, score: parseFloat(e.target.value) || 0 }))}
+                                                            min={scoreRange.min}
+                                                            max={scoreRange.max}
+                                                            step={scoreRange.step}
+                                                            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        />
+                                                    </div>
+
+                                                    {/* Progress */}
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                            Progress
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            value={editValues.progress || ''}
+                                                            onChange={(e) => setEditValues(prev => ({ ...prev, progress: parseInt(e.target.value) || 0 }))}
+                                                            min="0"
+                                                            max={entry.media?.episodes || entry.media?.chapters || 999}
+                                                            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        />
+                                                    </div>
+
+                                                    {/* Notes */}
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                            Notes
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={editValues.notes || ''}
+                                                            onChange={(e) => setEditValues(prev => ({ ...prev, notes: e.target.value }))}
+                                                            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            // Normal Display
+                                            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                                <span>{formatProgress(entry)}</span>
+                                                {entry.status && (
+                                                    <span className={`px-2 py-1 rounded text-xs ${getStatusColor(entry.status)} text-white`}>
+                                                        {getStatusLabel(entry.status)}
+                                                    </span>
+                                                )}
+                                                <span className="flex items-center gap-1">
+                                                    <Star className={`w-3 h-3 fill-current ${hasScore(entry) ? 'text-yellow-400' : 'text-gray-400'}`} />
+                                                    <span className={hasScore(entry) ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}>
+                                                        {formatScore(entry)}
+                                                    </span>
                                                 </span>
-                                            )}
-                                            <span className="flex items-center gap-1">
-                                                <Star className={`w-3 h-3 fill-current ${hasScore(entry) ? 'text-yellow-400' : 'text-gray-400'}`} />
-                                                <span className={hasScore(entry) ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}>
-                                                    {formatScore(entry)}
-                                                </span>
-                                            </span>
-                                        </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Actions */}
@@ -440,7 +629,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                             </div>
                                         ) : (
                                             <button
-                                                onClick={() => setEditingEntry(entry.id)}
+                                                onClick={() => handleStartEdit(entry)}
                                                 className="p-1 text-gray-600 hover:bg-gray-50 rounded"
                                                 title="Edit"
                                             >
