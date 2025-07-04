@@ -198,6 +198,9 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                             {selectedCount} of {totalCount} entries selected
                         </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                            💡 Click anywhere on a card to select it
+                        </p>
                     </div>
                 </div>
                 <button

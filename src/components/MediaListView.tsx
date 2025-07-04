@@ -304,15 +304,29 @@ export default function MediaListView({ client }: MediaListViewProps) {
                     {filteredEntries.map((entry) => (
                         <div
                             key={entry.id}
-                            className={`card media-card ${viewMode === 'list' ? 'p-4' : 'overflow-hidden'} ${selectedEntries.has(entry.id) ? 'ring-2 ring-blue-500' : ''
-                                }`}
+                            className={`card media-card ${viewMode === 'list' ? 'p-4' : 'overflow-hidden'} ${selectedEntries.has(entry.id) ? 'ring-4 ring-blue-500 bg-blue-100 dark:bg-blue-800/40 shadow-lg transform scale-[1.02] border-blue-500' : ''
+                                } ${bulkEditMode ? 'group cursor-pointer hover:shadow-md hover:ring-2 hover:ring-blue-300 hover:transform hover:scale-[1.01] transition-all duration-200' : ''}`}
+                            onClick={bulkEditMode ? (e) => {
+                                // Prevent selection when clicking on interactive elements
+                                const target = e.target as HTMLElement;
+                                const isInteractiveElement = target.closest('button, a, input, select, textarea');
+                                if (!isInteractiveElement) {
+                                    toggleEntrySelection(entry.id);
+                                }
+                            } : undefined}
                         >
                             {bulkEditMode && (
-                                <div className="absolute top-2 left-2 z-10">
+                                <div className={`absolute top-2 left-2 z-10 transition-opacity duration-200 ${selectedEntries.has(entry.id)
+                                    ? 'opacity-100'
+                                    : 'opacity-0 group-hover:opacity-100'
+                                    }`}>
                                     <input
                                         type="checkbox"
                                         checked={selectedEntries.has(entry.id)}
-                                        onChange={() => toggleEntrySelection(entry.id)}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            toggleEntrySelection(entry.id);
+                                        }}
                                         className="checkbox"
                                     />
                                 </div>
