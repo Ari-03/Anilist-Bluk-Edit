@@ -58,6 +58,26 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
 
     const rateLimiterRef = useRef<RateLimiter | null>(null)
 
+    // Get score range based on user's score format
+    const getScoreRange = () => {
+        const scoreFormat = user?.mediaListOptions?.scoreFormat
+        switch (scoreFormat) {
+            case 'POINT_100':
+                return { min: 0, max: 100, step: 1 }
+            case 'POINT_10_DECIMAL':
+                return { min: 0, max: 10, step: 0.1 }
+            case 'POINT_10':
+                return { min: 0, max: 10, step: 1 }
+            case 'POINT_5':
+                return { min: 0, max: 5, step: 1 }
+            case 'POINT_3':
+                return { min: 0, max: 3, step: 1 }
+            default:
+                return { min: 0, max: 10, step: 1 } // Default to 10-point scale
+        }
+    }
+
+    const scoreRange = getScoreRange()
     const selectedCount = selectedEntries.size
     const totalCount = filteredEntries.length
     const allSelected = selectedCount === totalCount && totalCount > 0
@@ -273,9 +293,9 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                     value={bulkOptions.score}
                                     onChange={(e) => setBulkOptions(prev => ({ ...prev, score: e.target.value }))}
                                     placeholder="No change"
-                                    min="0"
-                                    max="100"
-                                    step="1"
+                                    min={scoreRange.min}
+                                    max={scoreRange.max}
+                                    step={scoreRange.step}
                                     className="input"
                                 />
                             </div>

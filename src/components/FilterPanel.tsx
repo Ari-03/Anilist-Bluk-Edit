@@ -16,7 +16,8 @@ export default function FilterPanel() {
     const {
         filters,
         setFilters,
-        clearFilters
+        clearFilters,
+        user
     } = useStore()
 
     const [isExpanded, setIsExpanded] = useState(false)
@@ -24,6 +25,27 @@ export default function FilterPanel() {
 
     const currentYear = new Date().getFullYear()
     const years = Array.from({ length: 50 }, (_, i) => currentYear - i)
+
+    // Get score range based on user's score format
+    const getScoreRange = () => {
+        const scoreFormat = user?.mediaListOptions?.scoreFormat
+        switch (scoreFormat) {
+            case 'POINT_100':
+                return { min: 0, max: 100, step: 1 }
+            case 'POINT_10_DECIMAL':
+                return { min: 0, max: 10, step: 0.1 }
+            case 'POINT_10':
+                return { min: 0, max: 10, step: 1 }
+            case 'POINT_5':
+                return { min: 0, max: 5, step: 1 }
+            case 'POINT_3':
+                return { min: 0, max: 3, step: 1 }
+            default:
+                return { min: 0, max: 10, step: 1 } // Default to 10-point scale
+        }
+    }
+
+    const scoreRange = getScoreRange()
 
     const hasActiveFilters = !!(
         filters.search ||
@@ -70,7 +92,7 @@ export default function FilterPanel() {
     }
 
     const handleScoreRangeChange = (type: 'min' | 'max', value: number) => {
-        const currentScore = filters.score || { min: 0, max: 100 }
+        const currentScore = filters.score || { min: scoreRange.min, max: scoreRange.max }
         const newScore = { ...currentScore, [type]: value }
 
         // Ensure min <= max
@@ -219,28 +241,30 @@ export default function FilterPanel() {
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Min</label>
                                     <input
                                         type="range"
-                                        min="0"
-                                        max="100"
-                                        value={filters.score?.min || 0}
-                                        onChange={(e) => handleScoreRangeChange('min', parseInt(e.target.value))}
+                                        min={scoreRange.min}
+                                        max={scoreRange.max}
+                                        step={scoreRange.step}
+                                        value={filters.score?.min || scoreRange.min}
+                                        onChange={(e) => handleScoreRangeChange('min', parseFloat(e.target.value))}
                                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                                     />
                                     <div className="text-xs text-center text-gray-600 dark:text-gray-400">
-                                        {filters.score?.min || 0}
+                                        {filters.score?.min || scoreRange.min}
                                     </div>
                                 </div>
                                 <div className="flex-1">
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Max</label>
                                     <input
                                         type="range"
-                                        min="0"
-                                        max="100"
-                                        value={filters.score?.max || 100}
-                                        onChange={(e) => handleScoreRangeChange('max', parseInt(e.target.value))}
+                                        min={scoreRange.min}
+                                        max={scoreRange.max}
+                                        step={scoreRange.step}
+                                        value={filters.score?.max || scoreRange.max}
+                                        onChange={(e) => handleScoreRangeChange('max', parseFloat(e.target.value))}
                                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                                     />
                                     <div className="text-xs text-center text-gray-600 dark:text-gray-400">
-                                        {filters.score?.max || 100}
+                                        {filters.score?.max || scoreRange.max}
                                     </div>
                                 </div>
                             </div>
@@ -360,7 +384,7 @@ export default function FilterPanel() {
 
                                 {filters.score && (
                                     <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400 text-xs rounded">
-                                        Score: {filters.score.min || 0}-{filters.score.max || 100}
+                                        Score: {filters.score.min || scoreRange.min}-{filters.score.max || scoreRange.max}
                                         <button
                                             onClick={() => setFilters({ score: undefined })}
                                             className="text-yellow-400 hover:text-yellow-600"
