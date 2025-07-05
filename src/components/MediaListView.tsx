@@ -105,70 +105,86 @@ export default function MediaListView({ client }: MediaListViewProps) {
         }))
     })
 
-    // Calculate status counts based on filtered entries (excluding status filter)
+    // Calculate status counts by simulating what each status would show
     const getFilteredStatusCounts = () => {
-        let lists = baseLists
+        const simulateFiltersForStatus = (targetStatus: MediaListStatus | 'ALL') => {
+            let lists = baseLists
 
-        // Apply all filters except status filter
-        if (filters.format && filters.format.length > 0) {
-            lists = lists.filter(entry =>
-                entry.media?.format && filters.format!.includes(entry.media.format)
-            )
-        }
+            // Apply status filter first (same logic as store)
+            if (targetStatus !== 'ALL') {
+                lists = lists.filter(entry => entry.status === targetStatus)
+            }
 
-        if (filters.genre && filters.genre.length > 0) {
-            lists = lists.filter(entry =>
-                entry.media?.genres?.some(genre => filters.genre!.includes(genre))
-            )
-        }
-
-        if (filters.year) {
-            lists = lists.filter(entry => {
-                const year = entry.media?.startDate?.year || entry.media?.seasonYear
-                if (!year) return false
-                if (filters.year!.start && year < filters.year!.start) return false
-                if (filters.year!.end && year > filters.year!.end) return false
-                return true
-            })
-        }
-
-        if (filters.score) {
-            lists = lists.filter(entry => {
-                const score = entry.score || 0
-                if (filters.score!.min && score < filters.score!.min) return false
-                if (filters.score!.max && score > filters.score!.max) return false
-                return true
-            })
-        }
-
-        if (filters.search) {
-            const searchLower = filters.search.toLowerCase()
-            lists = lists.filter(entry => {
-                const title = entry.media?.title
-                return (
-                    title?.romaji?.toLowerCase().includes(searchLower) ||
-                    title?.english?.toLowerCase().includes(searchLower) ||
-                    title?.native?.toLowerCase().includes(searchLower) ||
-                    title?.userPreferred?.toLowerCase().includes(searchLower)
+            // Apply additional status filters from FilterPanel (only if target is 'ALL')
+            if (targetStatus === 'ALL' && filters.status && filters.status.length > 0) {
+                lists = lists.filter(entry =>
+                    entry.status && filters.status!.includes(entry.status)
                 )
-            })
-        }
+            }
 
-        // Apply FilterPanel status filter (only if currentStatus is 'ALL')
-        if (currentStatus === 'ALL' && filters.status && filters.status.length > 0) {
-            lists = lists.filter(entry =>
-                entry.status && filters.status!.includes(entry.status)
-            )
+            // Apply other filters (same logic as store)
+            if (filters.format && filters.format.length > 0) {
+                lists = lists.filter(entry =>
+                    entry.media?.format && filters.format!.includes(entry.media.format)
+                )
+            }
+
+            if (filters.genre && filters.genre.length > 0) {
+                lists = lists.filter(entry =>
+                    entry.media?.genres?.some(genre => filters.genre!.includes(genre))
+                )
+            }
+
+            if (filters.year) {
+                lists = lists.filter(entry => {
+                    const year = entry.media?.startDate?.year || entry.media?.seasonYear
+                    if (!year) return false
+                    if (filters.year!.start && year < filters.year!.start) return false
+                    if (filters.year!.end && year > filters.year!.end) return false
+                    return true
+                })
+            }
+
+            if (filters.score) {
+                lists = lists.filter(entry => {
+                    const score = entry.score || 0
+                    if (filters.score!.min && score < filters.score!.min) return false
+                    if (filters.score!.max && score > filters.score!.max) return false
+                    return true
+                })
+            }
+
+            if (filters.search) {
+                const searchLower = filters.search.toLowerCase()
+                lists = lists.filter(entry => {
+                    const title = entry.media?.title
+                    return (
+                        title?.romaji?.toLowerCase().includes(searchLower) ||
+                        title?.english?.toLowerCase().includes(searchLower) ||
+                        title?.native?.toLowerCase().includes(searchLower) ||
+                        title?.userPreferred?.toLowerCase().includes(searchLower)
+                    )
+                })
+            }
+
+            // Apply duplicate removal (same logic as store)
+            const uniqueMap = new Map()
+            lists.forEach(entry => {
+                uniqueMap.set(entry.id, entry)
+            })
+            lists = Array.from(uniqueMap.values())
+
+            return lists.length
         }
 
         return {
-            ALL: lists.length,
-            [MediaListStatus.CURRENT]: lists.filter(e => e.status === MediaListStatus.CURRENT).length,
-            [MediaListStatus.PLANNING]: lists.filter(e => e.status === MediaListStatus.PLANNING).length,
-            [MediaListStatus.COMPLETED]: lists.filter(e => e.status === MediaListStatus.COMPLETED).length,
-            [MediaListStatus.DROPPED]: lists.filter(e => e.status === MediaListStatus.DROPPED).length,
-            [MediaListStatus.PAUSED]: lists.filter(e => e.status === MediaListStatus.PAUSED).length,
-            [MediaListStatus.REPEATING]: lists.filter(e => e.status === MediaListStatus.REPEATING).length,
+            ALL: simulateFiltersForStatus('ALL'),
+            [MediaListStatus.CURRENT]: simulateFiltersForStatus(MediaListStatus.CURRENT),
+            [MediaListStatus.PLANNING]: simulateFiltersForStatus(MediaListStatus.PLANNING),
+            [MediaListStatus.COMPLETED]: simulateFiltersForStatus(MediaListStatus.COMPLETED),
+            [MediaListStatus.DROPPED]: simulateFiltersForStatus(MediaListStatus.DROPPED),
+            [MediaListStatus.PAUSED]: simulateFiltersForStatus(MediaListStatus.PAUSED),
+            [MediaListStatus.REPEATING]: simulateFiltersForStatus(MediaListStatus.REPEATING),
         }
     }
 
