@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSession, signIn, signOut } from 'next-auth/react'
+import { useAuth } from '@/contexts/AuthContext'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { MediaType } from '@/types/anilist'
@@ -9,10 +9,11 @@ import BulkEditPanel from '@/components/BulkEditPanel'
 import FilterPanel from '@/components/FilterPanel'
 import NotificationList from '@/components/NotificationList'
 import DebugPanel from '@/components/DebugPanel'
+import TokenLogin from '@/components/TokenLogin'
 import { Loader2, LogIn, User, Settings, Moon, Sun } from 'lucide-react'
 
 export default function Home() {
-    const { data: session, status } = useSession()
+    const { user: authUser, accessToken, isLoading: authLoading } = useAuth()
     const {
         user,
         darkMode,
@@ -34,20 +35,20 @@ export default function Home() {
 
     const [client, setClient] = useState<AniListClient | null>(null)
 
-    // Initialize AniList client when session is available
+    // Initialize AniList client when access token is available
     useEffect(() => {
-        if (session?.accessToken) {
-            const anilistClient = new AniListClient(session.accessToken)
+        if (accessToken) {
+            const anilistClient = new AniListClient(accessToken)
             setClient(anilistClient)
-            setAccessToken(session.accessToken)
+            setAccessToken(accessToken)
         }
-    }, [session, setAccessToken])
+    }, [accessToken, setAccessToken])
 
     // Load user data and media lists
     useEffect(() => {
         const loadUserData = async () => {
-            if (!client || !session?.accessToken) {
-                console.log('No client or session, skipping load')
+            if (!client || !accessToken) {
+                console.log('No client or access token, skipping load')
                 return
             }
 
@@ -76,10 +77,14 @@ export default function Home() {
             try {
                 setIsLoadingLists(true)
 
-                // Get current user
-                const userData = await client.getCurrentUser()
-                console.log('Got user data:', userData.name)
+                // Use auth user data or store user data
+                let userData = authUser || user
+                if (!userData) {
+                    userData = await client.getCurrentUser()
+                    console.log('Got user data:', userData.name)
+                }
                 setUser(userData)
+                console.log('Using user data:', userData.name)
 
                 // Load both anime and manga lists
                 const [animeListsData, mangaListsData] = await Promise.all([
@@ -109,7 +114,7 @@ export default function Home() {
         }
 
         loadUserData()
-    }, [client, session?.accessToken, shouldReloadData])
+    }, [client, accessToken, authUser, shouldReloadData])
 
     // Apply dark mode class to document
     useEffect(() => {
@@ -120,7 +125,7 @@ export default function Home() {
         }
     }, [darkMode])
 
-    if (status === 'loading') {
+    if (authLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <div className="text-center">
@@ -131,68 +136,8 @@ export default function Home() {
         )
     }
 
-    if (!session) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-                <div className="min-h-screen flex items-center justify-center px-4">
-                    <div className="max-w-md w-full">
-                        <div className="text-center mb-8">
-                            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                <User className="w-10 h-10 text-white" />
-                            </div>
-                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                                AniList Bulk Edit
-                            </h1>
-                            <p className="text-gray-600 dark:text-gray-400">
-                                Efficiently manage your anime and manga lists with powerful bulk editing tools
-                            </p>
-                        </div>
-
-                        <div className="card p-8">
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
-                                Sign in to get started
-                            </h2>
-
-                            <button
-                                onClick={() => signIn('anilist')}
-                                className="w-full anilist-blue text-white font-medium py-3 px-4 rounded-lg 
-                          hover:bg-opacity-90 transition-all duration-200 
-                          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50
-                          flex items-center justify-center gap-2"
-                            >
-                                <LogIn className="w-5 h-5" />
-                                Sign in with AniList
-                            </button>
-
-                            <div className="mt-6 text-center">
-                                <button
-                                    onClick={toggleDarkMode}
-                                    className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 
-                            hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-                                >
-                                    {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                                    {darkMode ? 'Light mode' : 'Dark mode'}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                            <p>
-                                Don't have an AniList account?{' '}
-                                <a
-                                    href="https://anilist.co/signup"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 dark:text-blue-400 hover:underline"
-                                >
-                                    Sign up here
-                                </a>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )
+    if (!accessToken) {
+        return <TokenLogin />
     }
 
     return (

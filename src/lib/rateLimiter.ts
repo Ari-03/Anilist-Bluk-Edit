@@ -21,6 +21,7 @@ export class RateLimiter {
     private requestQueue: Array<() => Promise<any>> = []
     private activeRequests = 0
     private requestTimes: number[] = []
+    private responseTimes: number[] = []
     private stats: RateLimiterStats = {
         totalRequests: 0,
         successfulRequests: 0,
@@ -47,9 +48,13 @@ export class RateLimiter {
         return new Promise((resolve, reject) => {
             this.requestQueue.push(async () => {
                 try {
+                    // Track that we're starting a new request (not a retry)
+                    this.stats.totalRequests++
                     const result = await this.executeWithRetry(requestFn)
+                    this.stats.successfulRequests++
                     resolve(result)
                 } catch (error) {
+                    this.stats.failedRequests++
                     reject(error)
                 }
             })
@@ -62,27 +67,23 @@ export class RateLimiter {
         const startTime = Date.now()
 
         try {
-            this.stats.totalRequests++
-
             // Wait for rate limit compliance
             await this.waitForRateLimit()
 
             const result = await requestFn()
 
-            this.stats.successfulRequests++
             this.updateResponseTime(Date.now() - startTime)
 
             return result
         } catch (error: any) {
-            this.stats.failedRequests++
-
             // Check if it's a rate limit error
             if (this.isRateLimitError(error) && retryCount < this.config.maxRetries) {
                 this.stats.rateLimitHits++
                 this.stats.retriedRequests++
 
-                const delay = this.config.initialRetryDelay * Math.pow(this.config.backoffMultiplier, retryCount)
-                console.warn(`Rate limit hit, retrying in ${delay}ms (attempt ${retryCount + 1}/${this.config.maxRetries})`)
+                // Wait 60 seconds for rate limit errors
+                const delay = 60000
+                console.warn(`Rate limit hit, waiting 60 seconds before retry (attempt ${retryCount + 1}/${this.config.maxRetries})`)
 
                 await this.delay(delay)
                 return this.executeWithRetry(requestFn, retryCount + 1)
@@ -92,8 +93,9 @@ export class RateLimiter {
             if (this.isRetryableError(error) && retryCount < this.config.maxRetries) {
                 this.stats.retriedRequests++
 
-                const delay = this.config.initialRetryDelay * Math.pow(this.config.backoffMultiplier, retryCount)
-                console.warn(`Request failed, retrying in ${delay}ms (attempt ${retryCount + 1}/${this.config.maxRetries})`)
+                // Wait 60 seconds for all failures
+                const delay = 60000
+                console.warn(`Request failed, waiting 60 seconds before retry (attempt ${retryCount + 1}/${this.config.maxRetries})`)
 
                 await this.delay(delay)
                 return this.executeWithRetry(requestFn, retryCount + 1)
@@ -163,8 +165,12 @@ export class RateLimiter {
     }
 
     private updateResponseTime(responseTime: number): void {
-        const totalTime = this.stats.averageResponseTime * this.stats.successfulRequests + responseTime
-        this.stats.averageResponseTime = totalTime / (this.stats.successfulRequests + 1)
+        // Store response times for calculating average
+        this.responseTimes.push(responseTime)
+
+        // Calculate average from all response times
+        const sum = this.responseTimes.reduce((acc: number, time: number) => acc + time, 0)
+        this.stats.averageResponseTime = sum / this.responseTimes.length
     }
 
     getStats(): RateLimiterStats {
@@ -183,6 +189,7 @@ export class RateLimiter {
         this.requestQueue = []
         this.activeRequests = 0
         this.requestTimes = []
+        this.responseTimes = []
         this.stats = {
             totalRequests: 0,
             successfulRequests: 0,

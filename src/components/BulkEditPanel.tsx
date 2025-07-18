@@ -158,7 +158,6 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
 
                     updateMediaListEntry(result)
                     results.push({ status: 'fulfilled', value: result })
-                    setProcessProgress(prev => ({ ...prev, current: prev.current + 1 }))
 
                     // Update stats display
                     setRateLimiterStats(rateLimiterRef.current.getStats())
@@ -166,8 +165,10 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                 } catch (error) {
                     console.error(`Failed to update entry ${entry.id}:`, error)
                     results.push({ status: 'rejected', reason: error })
-                    setProcessProgress(prev => ({ ...prev, current: prev.current + 1 }))
                 }
+
+                // Increment progress once per entry (regardless of success/failure)
+                setProcessProgress(prev => ({ ...prev, current: prev.current + 1 }))
             }
 
             const successful = results.filter(r => r.status === 'fulfilled').length

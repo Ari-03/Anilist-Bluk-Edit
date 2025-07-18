@@ -39,7 +39,7 @@ A powerful web application for efficiently managing your AniList anime and manga
 ## Tech Stack
 
 - **Frontend**: Next.js 14, React 18, TypeScript
-- **Authentication**: NextAuth.js with AniList OAuth2
+- **Authentication**: Custom token-based authentication with AniList personal access tokens
 - **State Management**: Zustand with persistence
 - **Styling**: Tailwind CSS with custom components
 - **API**: GraphQL with AniList API
@@ -50,7 +50,6 @@ A powerful web application for efficiently managing your AniList anime and manga
 ### Prerequisites
 - Node.js 18 or higher
 - AniList account
-- AniList OAuth application
 
 ### 1. Clone the Repository
 ```bash
@@ -63,40 +62,7 @@ cd anilist-bulk-edit
 npm install
 ```
 
-### 3. Create AniList OAuth Application
-1. Go to [AniList Developer Settings](https://anilist.co/settings/developer)
-2. Click "Create New Client"
-3. Fill in the application details:
-   - **Name**: AniList Bulk Edit (or your preferred name)
-   - **Redirect URL**: `http://localhost:3000/api/auth/callback/anilist`
-4. Save and note down your **Client ID** and **Client Secret**
-
-### 4. Environment Setup
-1. Copy the environment example file:
-   ```bash
-   cp env.example .env.local
-   ```
-
-2. Fill in your environment variables in `.env.local`:
-   ```env
-   # NextAuth.js Configuration
-   NEXTAUTH_URL=http://localhost:3000
-   NEXTAUTH_SECRET=your-nextauth-secret-here
-
-   # AniList OAuth Configuration
-   ANILIST_CLIENT_ID=your-anilist-client-id
-   ANILIST_CLIENT_SECRET=your-anilist-client-secret
-
-   # AniList API Endpoint
-   ANILIST_API_URL=https://graphql.anilist.co
-   ```
-
-   **Note**: Generate a secure random string for `NEXTAUTH_SECRET`. You can use:
-   ```bash
-   openssl rand -base64 32
-   ```
-
-### 5. Run the Development Server
+### 3. Run the Development Server
 ```bash
 npm run dev
 ```
@@ -106,8 +72,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Usage Guide
 
 ### Getting Started
-1. **Sign In**: Click "Sign in with AniList" on the homepage
-2. **Authorize**: Grant permissions to access your AniList data
+1. **Get Access Token**: Generate a personal access token from AniList
+   - Go to [AniList Developer Settings](https://anilist.co/settings/developer)
+   - Click "Create New Client" and note your Client ID
+   - Visit: `https://anilist.co/api/v2/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=token`
+   - Copy the access token from the URL after authorization
+2. **Sign In**: Enter your personal access token on the login page
 3. **Load Lists**: Your anime and manga lists will be automatically loaded
 
 ### Bulk Editing
