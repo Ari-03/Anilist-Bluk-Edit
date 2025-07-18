@@ -10,10 +10,10 @@ import FilterPanel from '@/components/FilterPanel'
 import NotificationList from '@/components/NotificationList'
 import DebugPanel from '@/components/DebugPanel'
 import TokenLogin from '@/components/TokenLogin'
-import { Loader2, LogIn, User, Settings, Moon, Sun } from 'lucide-react'
+import { Loader2, LogIn, LogOut, User, Moon, Sun } from 'lucide-react'
 
 export default function Home() {
-    const { user: authUser, accessToken, isLoading: authLoading } = useAuth()
+    const { user: authUser, accessToken, isLoading: authLoading, signOut } = useAuth()
     const {
         user,
         darkMode,
@@ -165,22 +165,6 @@ export default function Home() {
 
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => {
-                                        if (client && session?.accessToken) {
-                                            // Force reload by clearing timestamp
-                                            setLastDataLoad(0)
-                                            // The useEffect will trigger on next render
-                                            setTimeout(() => window.location.reload(), 100)
-                                        }
-                                    }}
-                                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 
-                            hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                    title="Refresh media lists"
-                                >
-                                    <Settings className="w-5 h-5" />
-                                </button>
-
-                                <button
                                     onClick={toggleDarkMode}
                                     className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 
                             hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -190,9 +174,15 @@ export default function Home() {
                                 </button>
 
                                 <button
-                                    onClick={() => signOut()}
-                                    className="btn-secondary text-sm"
+                                    onClick={() => {
+                                        if (confirm('Are you sure you want to sign out?')) {
+                                            signOut()
+                                        }
+                                    }}
+                                    className="btn-secondary text-sm flex items-center gap-2"
+                                    title="Sign out of AniList"
                                 >
+                                    <LogOut className="w-4 h-4" />
                                     Sign out
                                 </button>
                             </div>

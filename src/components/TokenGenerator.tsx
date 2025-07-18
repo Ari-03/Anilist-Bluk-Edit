@@ -42,7 +42,7 @@ const TokenGenerator: React.FC<TokenGeneratorProps> = ({ onTokenGenerated }) => 
             <li>Fill in the application details:
               <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
                 <li><strong>Name:</strong> Your app name (e.g., "My AniList Bulk Editor")</li>
-                <li><strong>Redirect URL:</strong> <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://example.com/callback</code></li>
+                <li><strong>Redirect URL:</strong> <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://anilist.co/api/v2/oauth/pin</code></li>
               </ul>
             </li>
             <li>Copy your <strong>Client ID</strong> and enter it below</li>
