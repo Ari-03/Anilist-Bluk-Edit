@@ -49,7 +49,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
     })
     const [showAdvanced, setShowAdvanced] = useState(false)
     const [showRateLimitConfig, setShowRateLimitConfig] = useState(false)
-    const [processProgress, setProcessProgress] = useState({ current: 0, total: 0 })
+    const [processProgress, setProcessProgress] = useState({ current: 0, total: 0, successful: 0, failed: 0 })
     const [rateLimiterStats, setRateLimiterStats] = useState<RateLimiterStats | null>(null)
     const [rateLimiterConfig, setRateLimiterConfig] = useState({
         maxRequestsPerSecond: 0.5, // Conservative for current 30 req/min limit
@@ -126,22 +126,28 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         }
 
         setIsProcessing(true)
-        setProcessProgress({ current: 0, total: selectedCount })
+        const selectedMediaLists = getSelectedEntries()
+        const totalEntries = selectedMediaLists.length
+        setProcessProgress({ current: 0, total: totalEntries, successful: 0, failed: 0 })
 
         // Initialize rate limiter with current config
         rateLimiterRef.current = new RateLimiter(rateLimiterConfig)
 
-        try {
-            const selectedMediaLists = getSelectedEntries()
-            const results = []
+        // Track results accurately
+        let successfulCount = 0
+        let failedCount = 0
+        let processedCount = 0
 
+        try {
             addNotification({
                 type: 'info',
-                message: `Starting bulk update of ${selectedCount} entries with rate limiting...`
+                message: `Starting bulk update of ${totalEntries} entries with rate limiting...`
             })
 
             // Process each update through the rate limiter
-            for (const entry of selectedMediaLists) {
+            for (let i = 0; i < selectedMediaLists.length; i++) {
+                const entry = selectedMediaLists[i]
+                
                 try {
                     // Validate progress if being updated
                     const entryUpdates = { ...updates }
@@ -157,29 +163,36 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                     })
 
                     updateMediaListEntry(result)
-                    results.push({ status: 'fulfilled', value: result })
-
-                    // Update stats display
-                    setRateLimiterStats(rateLimiterRef.current.getStats())
+                    successfulCount++
 
                 } catch (error) {
                     console.error(`Failed to update entry ${entry.id}:`, error)
-                    results.push({ status: 'rejected', reason: error })
+                    failedCount++
                 }
 
-                // Increment progress once per entry (regardless of success/failure)
-                setProcessProgress(prev => ({ ...prev, current: prev.current + 1 }))
+                // Increment progress after each entry is processed (success or failure)
+                processedCount++
+                setProcessProgress({ 
+                    current: processedCount, 
+                    total: totalEntries, 
+                    successful: successfulCount, 
+                    failed: failedCount 
+                })
+                
+                // Update stats display
+                if (rateLimiterRef.current) {
+                    setRateLimiterStats(rateLimiterRef.current.getStats())
+                }
             }
 
-            const successful = results.filter(r => r.status === 'fulfilled').length
-            const failed = results.filter(r => r.status === 'rejected').length
-
-            const finalStats = rateLimiterRef.current.getStats()
-            setRateLimiterStats(finalStats)
+            const finalStats = rateLimiterRef.current?.getStats()
+            if (finalStats) {
+                setRateLimiterStats(finalStats)
+            }
 
             addNotification({
-                type: successful > 0 ? 'success' : 'error',
-                message: `Bulk update completed: ${successful} successful, ${failed} failed. Rate limit hits: ${finalStats.rateLimitHits}, Retries: ${finalStats.retriedRequests}`
+                type: successfulCount > 0 ? 'success' : 'error',
+                message: `Bulk update completed: ${successfulCount} successful, ${failedCount} failed${finalStats ? `. Rate limit hits: ${finalStats.rateLimitHits}, Retries: ${finalStats.retriedRequests}` : ''}`
             })
 
             // Reset form and selection
@@ -202,7 +215,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
             })
         } finally {
             setIsProcessing(false)
-            setProcessProgress({ current: 0, total: 0 })
+            setProcessProgress({ current: 0, total: 0, successful: 0, failed: 0 })
         }
     }
 
@@ -586,7 +599,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                     )}
                                 </span>
                                 <span className="text-gray-600 dark:text-gray-400">
-                                    {processProgress.total > 0 ? Math.round((processProgress.current / processProgress.total) * 100) : 0}%
+                                    {processProgress.total > 0 ? Math.min(100, Math.round((processProgress.current / processProgress.total) * 100)) : 0}%
                                 </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -594,20 +607,22 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                     className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                                     style={{
                                         width: processProgress.total > 0
-                                            ? `${(processProgress.current / processProgress.total) * 100}%`
+                                            ? `${Math.min(100, (processProgress.current / processProgress.total) * 100)}%`
                                             : '0%'
                                     }}
                                 />
                             </div>
-                            {rateLimiterStats && (
-                                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                                    <span>Success: {rateLimiterStats.successfulRequests}</span>
-                                    <span>Failed: {rateLimiterStats.failedRequests}</span>
-                                    <span>Rate Limits: {rateLimiterStats.rateLimitHits}</span>
-                                    <span>Retries: {rateLimiterStats.retriedRequests}</span>
-                                    <span>Avg Time: {Math.round(rateLimiterStats.averageResponseTime)}ms</span>
-                                </div>
-                            )}
+                            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                                <span>Success: {processProgress.successful}</span>
+                                <span>Failed: {processProgress.failed}</span>
+                                {rateLimiterStats && (
+                                    <>
+                                        <span>Rate Limits: {rateLimiterStats.rateLimitHits}</span>
+                                        <span>Retries: {rateLimiterStats.retriedRequests}</span>
+                                        <span>Avg Time: {Math.round(rateLimiterStats.averageResponseTime)}ms</span>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     )}
 
