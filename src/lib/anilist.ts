@@ -1,4 +1,3 @@
-import { GraphQLClient } from 'graphql-request'
 import {
   User,
   MediaList,
@@ -9,19 +8,44 @@ import {
   ScoreFormat,
 } from '@/types/anilist'
 
-export const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co'
-
 export class AniListClient {
-  private client: GraphQLClient
+  private accessToken?: string
 
   constructor(accessToken?: string) {
-    this.client = new GraphQLClient(ANILIST_GRAPHQL_URL, {
-      headers: accessToken
-        ? {
-          Authorization: `Bearer ${accessToken}`,
-        }
-        : {},
+    this.accessToken = accessToken
+  }
+
+  private async request<T>(query: string, variables?: any): Promise<T> {
+    const response = await fetch('/api/anilist/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        variables,
+        token: this.accessToken,
+      }),
     })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      // Create an error that includes the status code for proper rate limit handling
+      const error = new Error(data.error || 'GraphQL request failed') as any
+      error.status = response.status
+      error.response = { status: response.status, data }
+      error.details = data.details || []
+      throw error
+    }
+
+    if (data.errors) {
+      const error = new Error(data.errors.map((e: any) => e.message).join(', ')) as any
+      error.graphQLErrors = data.errors
+      throw error
+    }
+
+    return data.data
   }
 
   async getCurrentUser(): Promise<User> {
@@ -78,7 +102,7 @@ export class AniListClient {
       }
     `
 
-    const data = await this.client.request<{ Viewer: User }>(query)
+    const data = await this.request<{ Viewer: User }>(query)
     return data.Viewer
   }
 
@@ -180,7 +204,7 @@ export class AniListClient {
     `
 
     const variables = { userId, type, status }
-    const data = await this.client.request<{
+    const data = await this.request<{
       MediaListCollection: { lists: { entries: MediaList[] }[] }
     }>(query, variables)
 
@@ -283,7 +307,7 @@ export class AniListClient {
     `
 
     const variables = { userId, type }
-    const data = await this.client.request<{
+    const data = await this.request<{
       MediaListCollection: { lists: { entries: MediaList[] }[] }
     }>(query, variables)
 
@@ -388,7 +412,7 @@ export class AniListClient {
     `
 
     const variables = { mediaId, ...updates }
-    const data = await this.client.request<{
+    const data = await this.request<{
       SaveMediaListEntry: MediaList
     }>(mutation, variables)
 
@@ -459,7 +483,7 @@ export class AniListClient {
     `
 
     const variables = { id }
-    const data = await this.client.request<{
+    const data = await this.request<{
       DeleteMediaListEntry: { deleted: boolean }
     }>(mutation, variables)
 
@@ -532,7 +556,7 @@ export class AniListClient {
     `
 
     const variables = { search, type, page, perPage }
-    const data = await this.client.request<{
+    const data = await this.request<{
       Page: {
         pageInfo: { hasNextPage: boolean; total: number }
         media: Media[]

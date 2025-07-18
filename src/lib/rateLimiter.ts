@@ -81,9 +81,11 @@ export class RateLimiter {
                 this.stats.rateLimitHits++
                 this.stats.retriedRequests++
 
-                // Wait 60 seconds for rate limit errors
-                const delay = 60000
-                console.warn(`Rate limit hit, waiting 60 seconds before retry (attempt ${retryCount + 1}/${this.config.maxRetries})`)
+                // For rate limit errors, wait based on the configured rate
+                // For 0.5 req/sec (30/min), wait at least 2 seconds, but increase with retries
+                const baseDelay = Math.ceil(1000 / this.config.maxRequestsPerSecond)
+                const delay = baseDelay * Math.pow(this.config.backoffMultiplier, retryCount)
+                console.warn(`Rate limit hit, waiting ${delay}ms before retry (attempt ${retryCount + 1}/${this.config.maxRetries})`)
 
                 await this.delay(delay)
                 return this.executeWithRetry(requestFn, retryCount + 1)
@@ -93,9 +95,9 @@ export class RateLimiter {
             if (this.isRetryableError(error) && retryCount < this.config.maxRetries) {
                 this.stats.retriedRequests++
 
-                // Wait 60 seconds for all failures
-                const delay = 60000
-                console.warn(`Request failed, waiting 60 seconds before retry (attempt ${retryCount + 1}/${this.config.maxRetries})`)
+                // Use exponential backoff for network errors
+                const delay = this.config.initialRetryDelay * Math.pow(this.config.backoffMultiplier, retryCount)
+                console.warn(`Request failed, waiting ${delay}ms before retry (attempt ${retryCount + 1}/${this.config.maxRetries})`)
 
                 await this.delay(delay)
                 return this.executeWithRetry(requestFn, retryCount + 1)
@@ -116,10 +118,13 @@ export class RateLimiter {
             this.activeRequests++
             this.stats.currentQueueSize = this.requestQueue.length
 
+            // Execute the request function without awaiting it, but handle completion
             requestFn()
                 .finally(() => {
                     this.activeRequests--
-                    this.processQueue()
+                    this.stats.currentQueueSize = this.requestQueue.length
+                    // Continue processing queue after this request finishes
+                    setTimeout(() => this.processQueue(), 0)
                 })
         }
 
@@ -128,16 +133,25 @@ export class RateLimiter {
 
     private async waitForRateLimit(): Promise<void> {
         const now = Date.now()
-        const oneSecondAgo = now - 1000
+        
+        // Calculate the time window based on the rate (in ms)
+        // For 0.5 requests/second, window should be 2000ms (2 seconds)
+        // For 1 request/second, window should be 1000ms (1 second)
+        const windowMs = Math.ceil(1000 / this.config.maxRequestsPerSecond)
+        const windowStart = now - windowMs
 
-        // Remove old request times
-        this.requestTimes = this.requestTimes.filter(time => time > oneSecondAgo)
+        // Remove old request times outside the current window
+        this.requestTimes = this.requestTimes.filter(time => time > windowStart)
 
-        // If we're at the limit, wait
-        if (this.requestTimes.length >= this.config.maxRequestsPerSecond) {
+        // Calculate how many requests we can make in this window
+        const maxRequestsInWindow = Math.ceil(this.config.maxRequestsPerSecond * (windowMs / 1000))
+
+        // If we're at the limit, wait until the oldest request is outside the window
+        if (this.requestTimes.length >= maxRequestsInWindow) {
             const oldestRequest = Math.min(...this.requestTimes)
-            const waitTime = 1000 - (now - oldestRequest)
+            const waitTime = windowMs - (now - oldestRequest) + 100 // Add 100ms buffer
             if (waitTime > 0) {
+                console.log(`Rate limit: waiting ${waitTime}ms (${this.requestTimes.length}/${maxRequestsInWindow} requests in ${windowMs}ms window)`)
                 await this.delay(waitTime)
             }
         }
@@ -146,10 +160,30 @@ export class RateLimiter {
     }
 
     private isRateLimitError(error: any): boolean {
-        return error?.response?.status === 429 ||
-            error?.status === 429 ||
-            error?.message?.toLowerCase().includes('rate limit') ||
-            error?.message?.toLowerCase().includes('too many requests')
+        // Check for HTTP 429 status
+        if (error?.response?.status === 429 || error?.status === 429) {
+            return true
+        }
+        
+        // Check for AniList-specific rate limit messages
+        const errorMessage = error?.message?.toLowerCase() || ''
+        const responseText = error?.response?.data?.toString?.()?.toLowerCase() || ''
+        const details = error?.details || []
+        
+        // Check error details from our proxy
+        const hasRateLimitInDetails = details.some((detail: any) => 
+            detail?.message?.toLowerCase?.()?.includes('rate limit') ||
+            detail?.message?.toLowerCase?.()?.includes('too many requests')
+        )
+        
+        return errorMessage.includes('rate limit') ||
+            errorMessage.includes('too many requests') ||
+            responseText.includes('rate limit') ||
+            responseText.includes('too many requests') ||
+            // AniList sometimes returns these
+            errorMessage.includes('throttled') ||
+            responseText.includes('throttled') ||
+            hasRateLimitInDetails
     }
 
     private isRetryableError(error: any): boolean {
@@ -198,6 +232,27 @@ export class RateLimiter {
             rateLimitHits: 0,
             averageResponseTime: 0,
             currentQueueSize: 0
+        }
+    }
+
+    // Debug method to check current rate limiting state
+    getDebugInfo(): {
+        windowMs: number,
+        maxRequestsInWindow: number,
+        currentRequests: number,
+        oldestRequestAge: number
+    } {
+        const windowMs = Math.ceil(1000 / this.config.maxRequestsPerSecond)
+        const maxRequestsInWindow = Math.ceil(this.config.maxRequestsPerSecond * (windowMs / 1000))
+        const now = Date.now()
+        const windowStart = now - windowMs
+        const currentRequestsInWindow = this.requestTimes.filter(time => time > windowStart)
+        
+        return {
+            windowMs,
+            maxRequestsInWindow,
+            currentRequests: currentRequestsInWindow.length,
+            oldestRequestAge: currentRequestsInWindow.length > 0 ? now - Math.min(...currentRequestsInWindow) : 0
         }
     }
 } 

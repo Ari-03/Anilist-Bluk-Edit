@@ -52,10 +52,10 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
     const [processProgress, setProcessProgress] = useState({ current: 0, total: 0, successful: 0, failed: 0 })
     const [rateLimiterStats, setRateLimiterStats] = useState<RateLimiterStats | null>(null)
     const [rateLimiterConfig, setRateLimiterConfig] = useState({
-        maxRequestsPerSecond: 0.5, // Conservative for current 30 req/min limit
-        maxConcurrentRequests: 2,
-        maxRetries: 3,
-        initialRetryDelay: 2000
+        maxRequestsPerSecond: 0.4, // Very conservative for 30 req/min limit (24/min = 0.4/sec)
+        maxConcurrentRequests: 1,  // Single request at a time to be safest
+        maxRetries: 5,             // More retries with better backoff
+        initialRetryDelay: 1000    // Start with shorter delay, exponential backoff will increase it
     })
 
     const rateLimiterRef = useRef<RateLimiter | null>(null)
@@ -457,7 +457,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                                         maxRequestsPerSecond: Math.max(0.1, parseFloat(e.target.value) || 0.1)
                                                     }))}
                                                     min="0.1"
-                                                    max="0.5"
+                                                    max="0.4"
                                                     step="0.1"
                                                     className="input text-sm"
                                                     disabled={isProcessing}
@@ -476,7 +476,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                                         maxConcurrentRequests: Math.max(1, parseInt(e.target.value) || 1)
                                                     }))}
                                                     min="1"
-                                                    max="3"
+                                                    max="1"
                                                     className="input text-sm"
                                                     disabled={isProcessing}
                                                 />
@@ -525,7 +525,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                                         <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                                         <p className="text-sm text-blue-800 dark:text-blue-200">
                                                             <strong>Note:</strong> AniList is currently limited to <strong>30 requests per minute</strong> (degraded state).
-                                                            Normal limit is 90/min. Lower values are safer but slower.
+                                                            Default 0.4/sec = 24/min provides safety margin. Normal limit is 90/min.
                                                         </p>
                                                     </div>
                                                 </div>
