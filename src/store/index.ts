@@ -308,7 +308,7 @@ export const useStore = create<AppState & AppActions>()(
                     get().applyFilters()
                 },
                 clearFilters: () => {
-                    set({ filters: { sortBy: 'title', sortOrder: 'asc' } })
+                    set({ filters: initialState.filters })
                     get().applyFilters()
                 },
                 applyFilters: () => {
@@ -356,6 +356,14 @@ export const useStore = create<AppState & AppActions>()(
                         lists = lists.filter(entry =>
                             entry.media?.genres?.some(genre => filters.genre!.includes(genre))
                         )
+                    }
+
+                    if (filters.country && filters.country.length > 0) {
+                        lists = lists.filter(entry => {
+                            const country = entry.media?.countryOfOrigin
+                            if (!country) return false
+                            return filters.country!.includes(country)
+                        })
                     }
 
                     if (filters.year) {
