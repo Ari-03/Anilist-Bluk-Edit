@@ -33,32 +33,7 @@ const MANGA_FORMATS = [
   { value: MediaFormat.ONE_SHOT, label: 'One Shot' }
 ]
 
-const STATUS_OPTIONS = [
-  { value: 'ALL', label: 'All' },
-  { value: MediaListStatus.CURRENT, label: 'Current' },
-  { value: MediaListStatus.COMPLETED, label: 'Completed' },
-  { value: MediaListStatus.PLANNING, label: 'Planning' },
-  { value: MediaListStatus.DROPPED, label: 'Dropped' },
-  { value: MediaListStatus.PAUSED, label: 'Paused' },
-  { value: MediaListStatus.REPEATING, label: 'Repeating' }
-]
-
-const COUNTRIES = [
-  { value: 'JP', label: 'Japan' },
-  { value: 'KR', label: 'South Korea' },
-  { value: 'CN', label: 'China' },
-  { value: 'TW', label: 'Taiwan' }
-]
-
-const COMMON_GENRES = [
-  'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror',
-  'Mystery', 'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural',
-  'Thriller', 'Ecchi', 'Harem', 'Josei', 'Kids', 'Mecha', 'Military',
-  'Music', 'Parody', 'Police', 'Psychological', 'School', 'Seinen',
-  'Shoujo', 'Shounen', 'Space', 'Super Power', 'Vampire', 'Yaoi', 'Yuri'
-]
-
-export default function LeftSidebar() {
+  export default function LeftSidebar() {
   const {
     currentType,
     setCurrentType,
@@ -72,6 +47,38 @@ export default function LeftSidebar() {
 
   const [activePopout, setActivePopout] = useState<string | null>(null)
   const [genreSearch, setGenreSearch] = useState<string>('')
+
+  const getStatusOptions = () => {
+    const baseOptions = [
+      { value: MediaListStatus.CURRENT, label: 'Current' },
+      { value: MediaListStatus.COMPLETED, label: 'Completed' },
+      { value: MediaListStatus.PLANNING, label: 'Planning' },
+      { value: MediaListStatus.DROPPED, label: 'Dropped' },
+      { value: MediaListStatus.PAUSED, label: 'Paused' },
+      { value: MediaListStatus.REPEATING, label: 'Repeating' }
+    ];
+
+    return baseOptions;
+  }
+
+  const mediaListOptions = currentType === 'ANIME' ? user?.mediaListOptions?.animeList : user?.mediaListOptions?.mangaList;
+  const customLists = mediaListOptions?.customLists || [];
+  const STATUS_OPTIONS = getStatusOptions();
+
+  const COUNTRIES = [
+    { value: 'JP', label: 'Japan' },
+    { value: 'KR', label: 'South Korea' },
+    { value: 'CN', label: 'China' },
+    { value: 'TW', label: 'Taiwan' }
+  ]
+
+  const COMMON_GENRES = [
+    'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror',
+    'Mystery', 'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural',
+    'Thriller', 'Ecchi', 'Harem', 'Josei', 'Kids', 'Mecha', 'Military',
+    'Music', 'Parody', 'Police', 'Psychological', 'School', 'Seinen',
+    'Shoujo', 'Shounen', 'Space', 'Super Power', 'Vampire', 'Yaoi', 'Yuri'
+  ]
 
   const togglePopout = (section: string) => {
     setActivePopout(activePopout === section ? null : section)
@@ -313,22 +320,34 @@ export default function LeftSidebar() {
               <div className="absolute left-full top-0 ml-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
                 <div className="space-y-2">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">Status</h3>
-                  <div className="space-y-1">
+                  <div className="max-h-60 overflow-y-auto space-y-1">
                     {STATUS_OPTIONS.map(option => (
                       <label key={option.value} className="flex items-center space-x-3 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={
-                            option.value === 'ALL'
-                              ? !filters.status?.length
-                              : filters.status?.includes(option.value as MediaListStatus) || false
-                          }
+                          checked={filters.status?.includes(option.value as MediaListStatus) || false}
                           onChange={() => handleStatusFilter(option.value)}
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5"
                         />
                         <span className="text-base text-gray-700 dark:text-gray-300">{option.label}</span>
                       </label>
                     ))}
+                    {customLists.length > 0 && (
+                      <>
+                        <h4 className="font-medium text-gray-900 dark:text-white text-md pt-2">Custom Lists</h4>
+                        {customLists.map(list => (
+                          <label key={list} className="flex items-center space-x-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={filters.status?.includes(list as MediaListStatus) || false}
+                              onChange={() => handleStatusFilter(list)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5"
+                            />
+                            <span className="text-base text-gray-700 dark:text-gray-300">{list}</span>
+                          </label>
+                        ))}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

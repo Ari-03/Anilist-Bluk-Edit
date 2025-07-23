@@ -10,7 +10,8 @@ import {
   ExternalLink,
   Edit3,
   Check,
-  X
+  X,
+  Trash2
 } from 'lucide-react'
 
 interface MediaListViewProps {
@@ -121,26 +122,29 @@ export default function MediaListView({ client }: MediaListViewProps) {
     })
   }
 
-  const handleSaveEdit = async (entryId: number, mediaId: number) => { // Add mediaId here
-    if (!client) return
+  const handleDeleteEntry = async (entryId: number) => {
+    if (!client) return;
 
-    try {
-      const result = await client.updateMediaListEntry(entryId, mediaId, editValues) // Pass mediaId
-      updateMediaListEntry(result)
-      setEditingEntry(null)
-      setEditValues({})
-      addNotification({
-        type: 'success',
-        message: 'Entry updated successfully'
-      })
-    } catch (error) {
-      console.error('Failed to update entry:', error)
-      addNotification({
-        type: 'error',
-        message: 'Failed to update entry'
-      })
+    if (window.confirm('Are you sure you want to delete this entry?')) {
+      try {
+        await client.deleteMediaListEntry(entryId);
+        // You'll need a way to remove the entry from the local state as well
+        // This depends on how your store is set up. For now, we'll just show a notification.
+        addNotification({
+          type: 'success',
+          message: 'Entry deleted successfully'
+        });
+        // Ideally, you would call a function here to remove the entry from the store
+        // and re-render the list.
+      } catch (error) {
+        console.error('Failed to delete entry:', error);
+        addNotification({
+          type: 'error',
+          message: 'Failed to delete entry'
+        });
+      }
     }
-  }
+  };
 
   const formatProgress = (entry: any) => {
     const current = entry.progress || 0
@@ -363,6 +367,13 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                                     >
                                                         <ExternalLink className="w-3 h-3" />
                                                     </a>
+                                                    <button
+                                                        onClick={() => handleDeleteEntry(entry.id)}
+                                                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                                        title="Delete Entry"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </button>
                                                 </div>
                                             </div>
                     )}
@@ -515,6 +526,14 @@ export default function MediaListView({ client }: MediaListViewProps) {
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
+
+                    <button
+                      onClick={() => handleDeleteEntry(entry.id)}
+                      className="p-1 text-red-600 hover:bg-red-50 rounded"
+                      title="Delete Entry"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               )}
