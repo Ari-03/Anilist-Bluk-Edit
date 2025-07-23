@@ -154,3 +154,65 @@
 .animate-slide-in-right {
     animation: slide-in-right 0.3s ease-out;
 }
+
+/* Dual Range Slider Styles */
+.slider {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    pointer-events: auto;
+    height: 8px; /* Reduced height since no thumbs */
+}
+
+/* Webkit Styles */
+.slider::-webkit-slider-track {
+    background: transparent;
+    height: 8px;
+    border-radius: 4px;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    height: 0;
+    width: 0;
+    cursor: pointer;
+    box-shadow: none;
+    margin-top: 0;
+    /* Hide the thumb completely */
+}
+
+.slider::-webkit-slider-thumb:hover {
+    background: transparent;
+    transform: none;
+}
+
+/* Firefox Styles */
+.slider::-moz-range-track {
+    background: transparent;
+    height: 8px;
+    border-radius: 4px;
+    border: none;
+}
+
+.slider::-moz-range-thumb {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    height: 0;
+    width: 0;
+    cursor: pointer;
+    box-shadow: none;
+    /* Hide the thumb completely */
+}
+
+.slider::-moz-range-thumb:hover {
+    background: transparent;
+    transform: none;
+}
+
+/* Remove dark mode thumb styles since thumbs are hidden */

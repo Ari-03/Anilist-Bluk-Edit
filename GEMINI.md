@@ -1,0 +1,1 @@
+This file contains context for the Gemini AI.

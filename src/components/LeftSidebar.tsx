@@ -73,6 +73,7 @@ export default function LeftSidebar() {
     } = useStore()
 
     const [activePopout, setActivePopout] = useState<string | null>(null)
+    const [genreSearch, setGenreSearch] = useState<string>('')
 
     const togglePopout = (section: string) => {
         setActivePopout(activePopout === section ? null : section)
@@ -137,17 +138,22 @@ export default function LeftSidebar() {
 
     const handleCountryFilter = (country: string) => {
         const countryArray = filters.country || []
+        console.log('Country filter clicked:', country, 'Current filters:', countryArray)
         
         if (countryArray.includes(country)) {
-            setFilters({
+            const newFilters = {
                 ...filters,
                 country: countryArray.filter(c => c !== country)
-            })
+            }
+            console.log('Removing country, new filters:', newFilters.country)
+            setFilters(newFilters)
         } else {
-            setFilters({
+            const newFilters = {
                 ...filters,
                 country: [...countryArray, country]
-            })
+            }
+            console.log('Adding country, new filters:', newFilters.country)
+            setFilters(newFilters)
         }
     }
 
@@ -255,36 +261,6 @@ export default function LeftSidebar() {
                     </div>
                 </div>
 
-                {/* View Controls */}
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        View
-                    </label>
-                    <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                                viewMode === 'grid'
-                                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                        >
-                            <Grid3X3 className="h-4 w-4" />
-                            Grid
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                                viewMode === 'list'
-                                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                        >
-                            <List className="h-4 w-4" />
-                            List
-                        </button>
-                    </div>
-                </div>
 
                 {/* Sort Controls */}
                 <div className="space-y-2">
@@ -322,7 +298,7 @@ export default function LeftSidebar() {
                     <div className="relative">
                         <button
                             onClick={() => togglePopout('status')}
-                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
                         >
                             <span className="flex items-center gap-2">
                                 <Tag className="h-4 w-4" />
@@ -340,10 +316,10 @@ export default function LeftSidebar() {
                         {activePopout === 'status' && (
                             <div className="absolute left-full top-0 ml-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
                                 <div className="space-y-2">
-                                    <h3 className="font-medium text-gray-900 dark:text-white">Status</h3>
+                                    <h3 className="font-medium text-gray-900 dark:text-white text-base">Status</h3>
                                     <div className="space-y-1">
                                         {STATUS_OPTIONS.map(option => (
-                                            <label key={option.value} className="flex items-center space-x-2 cursor-pointer">
+                                            <label key={option.value} className="flex items-center space-x-3 cursor-pointer">
                                                 <input
                                                     type="checkbox"
                                                     checked={
@@ -352,7 +328,7 @@ export default function LeftSidebar() {
                                                             : filters.status?.includes(option.value as MediaListStatus) || false
                                                     }
                                                     onChange={() => handleStatusFilter(option.value)}
-                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
                                                 />
                                                 <span className="text-sm text-gray-700 dark:text-gray-300">{option.label}</span>
                                             </label>
@@ -367,7 +343,7 @@ export default function LeftSidebar() {
                     <div className="relative">
                         <button
                             onClick={() => togglePopout('format')}
-                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
                         >
                             <span className="flex items-center gap-2">
                                 {currentType === MediaType.ANIME ? <Tv className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
@@ -385,15 +361,15 @@ export default function LeftSidebar() {
                         {activePopout === 'format' && (
                             <div className="absolute left-full top-0 ml-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
                                 <div className="space-y-2">
-                                    <h3 className="font-medium text-gray-900 dark:text-white">Format</h3>
+                                    <h3 className="font-medium text-gray-900 dark:text-white text-base">Format</h3>
                                     <div className="space-y-1">
                                         {formats.map(format => (
-                                            <label key={format.value} className="flex items-center space-x-2 cursor-pointer">
+                                            <label key={format.value} className="flex items-center space-x-3 cursor-pointer">
                                                 <input
                                                     type="checkbox"
                                                     checked={filters.format?.includes(format.value) || false}
                                                     onChange={() => handleFormatFilter(format.value)}
-                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
                                                 />
                                                 <span className="text-sm text-gray-700 dark:text-gray-300">{format.label}</span>
                                             </label>
@@ -404,11 +380,127 @@ export default function LeftSidebar() {
                         )}
                     </div>
 
-                    {/* Year Filter with Slider */}
+                    {/* Country Filter */}
+                    <div className="relative">
+                        <button
+                            onClick={() => togglePopout('country')}
+                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                        >
+                            <span className="flex items-center gap-2">
+                                <Globe className="h-4 w-4" />
+                                Country
+                                {filters.country?.length && (
+                                    <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded-full text-xs">
+                                        {filters.country.length}
+                                    </span>
+                                )}
+                            </span>
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                        
+                        {/* Country Pop-out Panel */}
+                        {activePopout === 'country' && (
+                            <div className="absolute left-full top-0 ml-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
+                                <div className="space-y-2">
+                                    <h3 className="font-medium text-gray-900 dark:text-white text-base">Country of Origin</h3>
+                                    <div className="space-y-2">
+                                        {COUNTRIES.map(country => (
+                                            <label key={country.value} className="flex items-center space-x-3 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={filters.country?.includes(country.value) || false}
+                                                    onChange={() => handleCountryFilter(country.value)}
+                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                                                />
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">{country.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Genre Filter */}
+                    <div className="relative">
+                        <button
+                            onClick={() => togglePopout('genre')}
+                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                        >
+                            <span className="flex items-center gap-2">
+                                <Tag className="h-4 w-4" />
+                                Genre
+                                {filters.genre?.length && (
+                                    <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded-full text-xs">
+                                        {filters.genre.length}
+                                    </span>
+                                )}
+                            </span>
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                        
+                        {/* Genre Pop-out Panel */}
+                        {activePopout === 'genre' && (
+                            <div className="absolute left-full top-0 ml-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
+                                <div className="space-y-3">
+                                    <h3 className="font-medium text-gray-900 dark:text-white text-base">Genres</h3>
+                                    
+                                    {/* Genre Search */}
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search genres..."
+                                            value={genreSearch}
+                                            onChange={(e) => setGenreSearch(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                                        />
+                                        {genreSearch && (
+                                            <button
+                                                onClick={() => setGenreSearch('')}
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Genre Checkboxes */}
+                                    <div className="max-h-60 overflow-y-auto space-y-2">
+                                        {COMMON_GENRES
+                                            .filter(genre => 
+                                                genre.toLowerCase().includes(genreSearch.toLowerCase())
+                                            )
+                                            .map(genre => (
+                                                <label key={genre} className="flex items-center space-x-3 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={filters.genre?.includes(genre) || false}
+                                                        onChange={() => handleGenreFilter(genre)}
+                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                                                    />
+                                                    <span className="text-sm text-gray-700 dark:text-gray-300">{genre}</span>
+                                                </label>
+                                            ))
+                                        }
+                                        {COMMON_GENRES.filter(genre => 
+                                            genre.toLowerCase().includes(genreSearch.toLowerCase())
+                                        ).length === 0 && (
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
+                                                No genres found matching "{genreSearch}"
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Year Filter with Dual-Range Slider */}
                     <div className="relative">
                         <button
                             onClick={() => togglePopout('year')}
-                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
                         >
                             <span className="flex items-center gap-2">
                                 <Calendar className="h-4 w-4" />
@@ -426,41 +518,63 @@ export default function LeftSidebar() {
                         {activePopout === 'year' && (
                             <div className="absolute left-full top-0 ml-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
                                 <div className="space-y-4">
-                                    <h3 className="font-medium text-gray-900 dark:text-white">Year Range</h3>
+                                    <h3 className="font-medium text-gray-900 dark:text-white text-base">Year Range</h3>
                                     <div className="space-y-4">
-                                        <div className="flex items-center space-x-2">
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">From:</span>
-                                            <input
-                                                type="range"
-                                                min="1950"
-                                                max={currentYear}
-                                                value={filters.year?.start || 1950}
-                                                onChange={(e) => setFilters({
-                                                    ...filters,
-                                                    year: { ...filters.year, start: parseInt(e.target.value) }
-                                                })}
-                                                className="flex-1"
-                                            />
-                                            <span className="text-sm font-medium text-gray-900 dark:text-white w-12">
-                                                {filters.year?.start || 1950}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">To:</span>
-                                            <input
-                                                type="range"
-                                                min="1950"
-                                                max={currentYear}
-                                                value={filters.year?.end || currentYear}
-                                                onChange={(e) => setFilters({
-                                                    ...filters,
-                                                    year: { ...filters.year, end: parseInt(e.target.value) }
-                                                })}
-                                                className="flex-1"
-                                            />
-                                            <span className="text-sm font-medium text-gray-900 dark:text-white w-12">
-                                                {filters.year?.end || currentYear}
-                                            </span>
+                                        <div className="slider-container">
+                                            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                                <span>From: {filters.year?.start || 1950}</span>
+                                                <span>To: {filters.year?.end || currentYear}</span>
+                                            </div>
+                                            <div className="relative h-8">
+                                                {/* Track background */}
+                                                <div className="absolute top-1/2 left-0 right-0 h-2 bg-gray-200 dark:bg-gray-600 rounded-full transform -translate-y-1/2"></div>
+                                                {/* Active track */}
+                                                <div 
+                                                    className="absolute top-1/2 h-2 bg-blue-500 rounded-full transform -translate-y-1/2"
+                                                    style={{
+                                                        left: `${((filters.year?.start || 1950) - 1950) / (currentYear - 1950) * 100}%`,
+                                                        width: `${((filters.year?.end || currentYear) - (filters.year?.start || 1950)) / (currentYear - 1950) * 100}%`
+                                                    }}
+                                                ></div>
+                                                {/* Min range slider */}
+                                                <input
+                                                    type="range"
+                                                    min="1950"
+                                                    max={currentYear}
+                                                    value={filters.year?.start || 1950}
+                                                    onChange={(e) => {
+                                                        const value = parseInt(e.target.value)
+                                                        const maxValue = filters.year?.end || currentYear
+                                                        setFilters({
+                                                            ...filters,
+                                                            year: { 
+                                                                ...filters.year, 
+                                                                start: Math.min(value, maxValue)
+                                                            }
+                                                        })
+                                                    }}
+                                                    className="slider"
+                                                />
+                                                {/* Max range slider */}
+                                                <input
+                                                    type="range"
+                                                    min="1950"
+                                                    max={currentYear}
+                                                    value={filters.year?.end || currentYear}
+                                                    onChange={(e) => {
+                                                        const value = parseInt(e.target.value)
+                                                        const minValue = filters.year?.start || 1950
+                                                        setFilters({
+                                                            ...filters,
+                                                            year: { 
+                                                                ...filters.year, 
+                                                                end: Math.max(value, minValue)
+                                                            }
+                                                        })
+                                                    }}
+                                                    className="slider"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -468,11 +582,11 @@ export default function LeftSidebar() {
                         )}
                     </div>
 
-                    {/* Score Filter with Slider */}
+                    {/* Score Filter with Dual-Range Slider */}
                     <div className="relative">
                         <button
                             onClick={() => togglePopout('score')}
-                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                            className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
                         >
                             <span className="flex items-center gap-2">
                                 <Star className="h-4 w-4" />
@@ -490,43 +604,65 @@ export default function LeftSidebar() {
                         {activePopout === 'score' && (
                             <div className="absolute left-full top-0 ml-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
                                 <div className="space-y-4">
-                                    <h3 className="font-medium text-gray-900 dark:text-white">Score Range</h3>
+                                    <h3 className="font-medium text-gray-900 dark:text-white text-base">Score Range</h3>
                                     <div className="space-y-4">
-                                        <div className="flex items-center space-x-2">
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">Min:</span>
-                                            <input
-                                                type="range"
-                                                min={scoreRange.min}
-                                                max={scoreRange.max}
-                                                step={scoreRange.step}
-                                                value={filters.score?.min || scoreRange.min}
-                                                onChange={(e) => setFilters({
-                                                    ...filters,
-                                                    score: { ...filters.score, min: parseFloat(e.target.value) }
-                                                })}
-                                                className="flex-1"
-                                            />
-                                            <span className="text-sm font-medium text-gray-900 dark:text-white w-12">
-                                                {filters.score?.min || scoreRange.min}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">Max:</span>
-                                            <input
-                                                type="range"
-                                                min={scoreRange.min}
-                                                max={scoreRange.max}
-                                                step={scoreRange.step}
-                                                value={filters.score?.max || scoreRange.max}
-                                                onChange={(e) => setFilters({
-                                                    ...filters,
-                                                    score: { ...filters.score, max: parseFloat(e.target.value) }
-                                                })}
-                                                className="flex-1"
-                                            />
-                                            <span className="text-sm font-medium text-gray-900 dark:text-white w-12">
-                                                {filters.score?.max || scoreRange.max}
-                                            </span>
+                                        <div className="slider-container">
+                                            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                                <span>Min: {filters.score?.min || scoreRange.min}</span>
+                                                <span>Max: {filters.score?.max || scoreRange.max}</span>
+                                            </div>
+                                            <div className="relative h-8">
+                                                {/* Track background */}
+                                                <div className="absolute top-1/2 left-0 right-0 h-2 bg-gray-200 dark:bg-gray-600 rounded-full transform -translate-y-1/2"></div>
+                                                {/* Active track */}
+                                                <div 
+                                                    className="absolute top-1/2 h-2 bg-blue-500 rounded-full transform -translate-y-1/2"
+                                                    style={{
+                                                        left: `${((filters.score?.min || scoreRange.min) - scoreRange.min) / (scoreRange.max - scoreRange.min) * 100}%`,
+                                                        width: `${((filters.score?.max || scoreRange.max) - (filters.score?.min || scoreRange.min)) / (scoreRange.max - scoreRange.min) * 100}%`
+                                                    }}
+                                                ></div>
+                                                {/* Min range slider */}
+                                                <input
+                                                    type="range"
+                                                    min={scoreRange.min}
+                                                    max={scoreRange.max}
+                                                    step={scoreRange.step}
+                                                    value={filters.score?.min || scoreRange.min}
+                                                    onChange={(e) => {
+                                                        const value = parseFloat(e.target.value)
+                                                        const maxValue = filters.score?.max || scoreRange.max
+                                                        setFilters({
+                                                            ...filters,
+                                                            score: { 
+                                                                ...filters.score, 
+                                                                min: Math.min(value, maxValue)
+                                                            }
+                                                        })
+                                                    }}
+                                                    className="slider"
+                                                />
+                                                {/* Max range slider */}
+                                                <input
+                                                    type="range"
+                                                    min={scoreRange.min}
+                                                    max={scoreRange.max}
+                                                    step={scoreRange.step}
+                                                    value={filters.score?.max || scoreRange.max}
+                                                    onChange={(e) => {
+                                                        const value = parseFloat(e.target.value)
+                                                        const minValue = filters.score?.min || scoreRange.min
+                                                        setFilters({
+                                                            ...filters,
+                                                            score: { 
+                                                                ...filters.score, 
+                                                                max: Math.max(value, minValue)
+                                                            }
+                                                        })
+                                                    }}
+                                                    className="slider"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -535,6 +671,39 @@ export default function LeftSidebar() {
                     </div>
 
                     {/* More filters can be added here following the same pattern */}
+                </div>
+                
+                {/* View Controls - Moved to bottom */}
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="space-y-2">
+                        <label className="text-base font-medium text-gray-700 dark:text-gray-300">
+                            View Mode
+                        </label>
+                        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                                    viewMode === 'grid'
+                                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <Grid3X3 className="h-4 w-4" />
+                                Grid
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                                    viewMode === 'list'
+                                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <List className="h-4 w-4" />
+                                List
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
