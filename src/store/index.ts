@@ -345,7 +345,7 @@ export const useStore = create<AppState & AppActions>()(
                                 return true;
                             }
                             if (entry.customLists && typeof entry.customLists === 'object') {
-                                const customLists = Object.keys(entry.customLists).filter(key => entry.customLists[key]);
+                                const customLists = Object.keys(entry.customLists).filter(key => entry.customLists && entry.customLists[key]);
                                 if (customLists.some(list => filters.status!.includes(list as MediaListStatus))) {
                                     return true;
                                 }

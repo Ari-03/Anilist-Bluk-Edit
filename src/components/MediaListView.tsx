@@ -92,12 +92,12 @@ export default function MediaListView({ client }: MediaListViewProps) {
     }))
   })
 
-  const handleQuickEdit = async (entryId: number, field: string, value: any) => {
+  const handleQuickEdit = async (entryId: number, mediaId: number, field: string, value: any) => {
     if (!client) return
 
     try {
       const updates = { [field]: value }
-      const result = await client.updateMediaListEntry(entryId, updates)
+      const result = await client.updateMediaListEntry(entryId, mediaId, updates)
       updateMediaListEntry(result)
       addNotification({
         type: 'success',
@@ -120,6 +120,27 @@ export default function MediaListView({ client }: MediaListViewProps) {
       progress: entry.progress || 0,
       notes: entry.notes || ''
     })
+  }
+
+  const handleSaveEdit = async (entryId: number, mediaId: number) => {
+    if (!client) return
+
+    try {
+      const result = await client.updateMediaListEntry(entryId, mediaId, editValues)
+      updateMediaListEntry(result)
+      setEditingEntry(null)
+      setEditValues({})
+      addNotification({
+        type: 'success',
+        message: 'Entry updated successfully'
+      })
+    } catch (error) {
+      console.error('Failed to update entry:', error)
+      addNotification({
+        type: 'error',
+        message: 'Failed to update entry'
+      })
+    }
   }
 
   const handleDeleteEntry = async (entryId: number) => {
@@ -317,7 +338,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                         {/* Edit Actions */}
                         <div className="flex justify-end gap-2 mt-2">
                           <button
-                            onClick={() => handleSaveEdit(entry.id, entry.media.id)} // Pass mediaId
+                            onClick={() => entry.media && handleSaveEdit(entry.id, entry.media.id)} // Pass mediaId
                             className="p-1 text-green-600 hover:bg-green-50 rounded"
                             title="Save"
                           >
@@ -490,7 +511,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                     {editingEntry === entry.id ? (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleSaveEdit(entry.id, entry.media.id)} // Pass mediaId
+                          onClick={() => entry.media && handleSaveEdit(entry.id, entry.media.id)} // Pass mediaId
                           className="p-1 text-green-600 hover:bg-green-50 rounded"
                           title="Save"
                         >

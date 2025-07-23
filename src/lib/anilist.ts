@@ -426,7 +426,8 @@ export class AniListClient {
 
   async bulkUpdateMediaListEntries(
     updates: Array<{
-      id: number // Changed from mediaId to id
+      id: number
+      mediaId: number
       status?: MediaListStatus
       score?: number
       progress?: number
@@ -449,8 +450,8 @@ export class AniListClient {
 
     for (let i = 0; i < updates.length; i += batchSize) {
       const batch = updates.slice(i, i + batchSize)
-      const batchPromises = batch.map(({ id, ...update }) =>
-        this.updateMediaListEntry(id, update)
+      const batchPromises = batch.map(({ id, mediaId, ...update }) =>
+        this.updateMediaListEntry(id, mediaId, update)
       )
 
       try {
@@ -459,9 +460,9 @@ export class AniListClient {
       } catch (error) {
         // If a batch fails, try individual updates
         console.warn(`Batch ${i / batchSize + 1} failed, trying individual updates:`, error)
-        for (const { id, ...update } of batch) {
+        for (const { id, mediaId, ...update } of batch) {
           try {
-            const result = await this.updateMediaListEntry(id, update)
+            const result = await this.updateMediaListEntry(id, mediaId, update)
             results.push(result)
           } catch (individualError) {
             console.error(`Failed to update media with entry id ${id}:`, individualError)

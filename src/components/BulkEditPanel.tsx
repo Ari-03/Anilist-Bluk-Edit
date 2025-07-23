@@ -159,7 +159,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                     }
 
                     const result = await rateLimiterRef.current.execute(async () => {
-                        return await client.updateMediaListEntry(entry.mediaId, entryUpdates)
+                        return await client.updateMediaListEntry(entry.id, entry.mediaId, entryUpdates)
                     })
 
                     updateMediaListEntry(result)
