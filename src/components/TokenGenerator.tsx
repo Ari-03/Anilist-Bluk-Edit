@@ -38,16 +38,21 @@ const TokenGenerator: React.FC<TokenGeneratorProps> = ({ onTokenGenerated }) => 
           <p className="font-medium">To use this application, you need to create your own AniList OAuth application:</p>
           <ol className="list-decimal list-inside space-y-2 ml-4">
             <li>Go to <a href="https://anilist.co/settings/developer" target="_blank" rel="noopener noreferrer" className="underline font-medium">AniList Developer Settings</a></li>
-            <li>Click <strong>"Create New Client"</strong></li>
+            <li>Click <strong>&quot;Create New Client&quot;</strong></li>
             <li>Fill in the application details:
               <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
-                <li><strong>Name:</strong> Your app name (e.g., "My AniList Bulk Editor")</li>
-                <li><strong>Redirect URL:</strong> <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://anilist.co/api/v2/oauth/pin</code></li>
+                <li><strong>Name:</strong> Your app name (e.g., &quot;My AniList Bulk Editor&quot;)</li>
+                <li><strong>Redirect URL:</strong> 
+                  <div className="mt-1 space-y-1">
+                    <div>For OAuth flow: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '{your-domain}/auth/callback'}</code></div>
+                    <div>For manual tokens: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://anilist.co/api/v2/oauth/pin</code></div>
+                  </div>
+                </li>
               </ul>
             </li>
-            <li>Copy your <strong>Client ID</strong> and enter it below</li>
-            <li>Click the "Generate Token" button that appears</li>
-            <li>Authorize the application and copy the access token from the URL</li>
+            <li>Copy your <strong>Client ID</strong> for OAuth login, or use the manual token method below</li>
+            <li><strong>For OAuth:</strong> Use the Client ID in the OAuth login section above</li>
+            <li><strong>For Manual Token:</strong> Enter the Client ID below and follow the token generation process</li>
           </ol>
         </div>
       </div>
@@ -90,7 +95,7 @@ const TokenGenerator: React.FC<TokenGeneratorProps> = ({ onTokenGenerated }) => 
               </button>
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Click → Authorize → Copy token from URL (after "access_token=")
+              Click → Authorize → Copy token from URL (after &quot;access_token=&quot;)
             </p>
           </div>
         )}
@@ -102,7 +107,7 @@ const TokenGenerator: React.FC<TokenGeneratorProps> = ({ onTokenGenerated }) => 
           <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-amber-800 dark:text-amber-300">
             <p className="font-medium">Security Note:</p>
-            <p>Tokens provide full access to your AniList account. Keep them secure and don't share them. Tokens are valid for 1 year.</p>
+            <p>Tokens provide full access to your AniList account. Keep them secure and don&apos;t share them. Tokens are valid for 1 year.</p>
           </div>
         </div>
       </div>

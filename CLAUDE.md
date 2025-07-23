@@ -66,11 +66,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Handles rate limit errors with 60-second delays
 
 ### Authentication
-- Uses custom token-based authentication with AniList personal access tokens
-- Authentication context in `src/contexts/AuthContext.tsx`
-- Token validation API route in `src/pages/api/auth/token.ts`
-- Login component in `src/components/TokenLogin.tsx`
-- No environment variables required for authentication
+- **Dual Authentication Methods**: OAuth flow and manual token entry
+- **OAuth Flow**: Seamless authentication via AniList OAuth (requires Client ID configuration)
+- **Manual Token**: Fallback method for users who prefer personal access tokens
+- **Secure Storage**: Tokens stored in httpOnly cookies instead of localStorage
+- **Session Management**: Automatic session validation and expiration handling
+- **Migration Support**: Automatically migrates old localStorage tokens to secure storage
+
+#### Authentication Components
+- `src/contexts/AuthContext.tsx` - Enhanced auth context with OAuth support
+- `src/pages/auth/callback.tsx` - OAuth callback handler
+- `src/pages/api/auth/signin.ts` - Secure sign-in with cookie storage
+- `src/pages/api/auth/session.ts` - Session validation and management
+- `src/pages/api/auth/signout.ts` - Secure sign-out with cookie cleanup
+- `src/components/TokenLogin.tsx` - Updated login UI with OAuth integration
+- `src/components/SessionStatus.tsx` - Session status and expiration warnings
+- `src/lib/auth.ts` - Authentication utilities and middleware
 
 ### Type System (src/types/anilist.ts)
 - Comprehensive TypeScript definitions for AniList API
@@ -111,13 +122,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Environment Variables
 
-Optional for development:
+Optional configuration for enhanced functionality:
 ```env
+# AniList OAuth Client ID (optional, enables seamless OAuth login)
+NEXT_PUBLIC_ANILIST_CLIENT_ID=your_client_id_here
+
 # AniList API Endpoint (optional, defaults to https://graphql.anilist.co)
 ANILIST_API_URL=https://graphql.anilist.co
+
+# Environment (affects cookie security settings)
+NODE_ENV=development
 ```
 
-**Authentication**: No environment variables required. Users provide their own personal access tokens through the UI.
+### OAuth Setup (Optional but Recommended)
+1. Create an AniList OAuth application at [AniList Developer Settings](https://anilist.co/settings/developer)
+2. Set redirect URI to: `{your-domain}/auth/callback`
+3. Copy the Client ID to `NEXT_PUBLIC_ANILIST_CLIENT_ID` environment variable
+4. Users can now use seamless OAuth login in addition to manual token entry
+
+**Authentication Fallback**: Manual token entry is always available, requiring no environment setup.
 
 ## Common Patterns
 
