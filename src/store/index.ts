@@ -340,9 +340,18 @@ export const useStore = create<AppState & AppActions>()(
 
                     // Apply additional status filters from FilterPanel (only if currentStatus is 'ALL')
                     if (currentStatus === 'ALL' && filters.status && filters.status.length > 0) {
-                        lists = lists.filter(entry =>
-                            entry.status && filters.status!.includes(entry.status)
-                        )
+                        lists = lists.filter(entry => {
+                            if (entry.status && filters.status!.includes(entry.status)) {
+                                return true;
+                            }
+                            if (entry.customLists && typeof entry.customLists === 'object') {
+                                const customLists = Object.keys(entry.customLists).filter(key => entry.customLists[key]);
+                                if (customLists.some(list => filters.status!.includes(list as MediaListStatus))) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        })
                         console.log('After FilterPanel status filter:', lists.length, 'entries')
                     }
 
