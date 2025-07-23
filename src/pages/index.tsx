@@ -37,10 +37,20 @@ export default function Home() {
 
     // Initialize AniList client when access token is available
     useEffect(() => {
+        console.log('Access token changed:', { 
+            hasToken: !!accessToken, 
+            tokenLength: accessToken?.length,
+            hasAuthUser: !!authUser 
+        })
+        
         if (accessToken) {
             const anilistClient = new AniListClient(accessToken)
             setClient(anilistClient)
             setAccessToken(accessToken)
+            console.log('AniList client initialized successfully')
+        } else {
+            setClient(null)
+            console.log('No access token - client cleared')
         }
     }, [accessToken, setAccessToken])
 
@@ -125,18 +135,26 @@ export default function Home() {
         }
     }, [darkMode])
 
+    console.log('Render state:', { 
+        authLoading, 
+        hasAccessToken: !!accessToken, 
+        hasAuthUser: !!authUser,
+        hasClient: !!client
+    })
+
     if (authLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <div className="text-center">
                     <div className="loading-spinner w-12 h-12 mx-auto mb-4"></div>
-                    <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+                    <p className="text-gray-600 dark:text-gray-400">Authenticating...</p>
                 </div>
             </div>
         )
     }
 
-    if (!accessToken) {
+    if (!accessToken || !authUser) {
+        console.log('Showing login screen - missing auth data')
         return <TokenLogin />
     }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { useAuth } from '@/contexts/AuthContext'
 import { Loader2, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
@@ -8,37 +8,76 @@ const AuthCallback: React.FC = () => {
   const { signInWithToken } = useAuth()
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing')
   const [error, setError] = useState<string>('')
+  const processingRef = useRef(false)
 
   useEffect(() => {
+    let isMounted = true // React Strict Mode protection
+
     const handleCallback = async () => {
+      // Prevent duplicate processing (race condition and Strict Mode protection)
+      if (processingRef.current) {
+        console.log('OAuth callback already processing, skipping')
+        return
+      }
+      
+      processingRef.current = true
+
       try {
         // Extract access token from URL fragment
         const fragment = window.location.hash.substring(1)
+        console.log('OAuth callback fragment:', fragment)
+        
         const params = new URLSearchParams(fragment)
         const accessToken = params.get('access_token')
         const error = params.get('error')
         const errorDescription = params.get('error_description')
+        const tokenType = params.get('token_type')
+        const expiresIn = params.get('expires_in')
+
+        console.log('OAuth callback params:', {
+          accessToken: accessToken ? accessToken.substring(0, 10) + '...' : null,
+          error,
+          errorDescription,
+          tokenType,
+          expiresIn
+        })
 
         if (error) {
-          setStatus('error')
-          setError(errorDescription || error || 'Authorization failed')
+          if (isMounted) {
+            setStatus('error')
+            setError(errorDescription || error || 'Authorization failed')
+          }
           return
         }
 
         if (!accessToken) {
-          setStatus('error')
-          setError('No access token received from AniList')
+          if (isMounted) {
+            setStatus('error')
+            setError('No access token received from AniList')
+          }
           return
         }
+
+        console.log('Token format check:', {
+          length: accessToken.length,
+          startsCorrectly: accessToken.length > 10,
+          type: typeof accessToken
+        })
 
         // Use the new secure sign-in method
         const result = await signInWithToken(accessToken)
         
+        if (!isMounted) return // Component unmounted during async operation
+        
         if (result.success) {
           setStatus('success')
+          // Clear the URL fragment to prevent re-processing
+          window.history.replaceState(null, '', window.location.pathname)
           // Redirect to main app after a brief success message
           setTimeout(() => {
-            router.push('/')
+            if (isMounted) {
+              router.push('/')
+            }
           }, 1500)
         } else {
           setStatus('error')
@@ -46,12 +85,21 @@ const AuthCallback: React.FC = () => {
         }
       } catch (err) {
         console.error('Callback error:', err)
-        setStatus('error')
-        setError('An unexpected error occurred during authentication')
+        if (isMounted) {
+          setStatus('error')
+          setError('An unexpected error occurred during authentication')
+        }
       }
     }
 
     handleCallback()
+
+    // Cleanup function for React Strict Mode
+    return () => {
+      isMounted = false
+      // Reset processing flag if component unmounts during processing
+      processingRef.current = false
+    }
   }, [router, signInWithToken])
 
   const handleRetry = () => {
