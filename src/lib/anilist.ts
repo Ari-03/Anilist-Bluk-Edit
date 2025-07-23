@@ -317,7 +317,8 @@ export class AniListClient {
   }
 
   async updateMediaListEntry(
-    mediaId: number,
+    id: number,
+    mediaId: number, // Add mediaId here
     updates: Partial<{
       status: MediaListStatus
       score: number
@@ -336,7 +337,8 @@ export class AniListClient {
   ): Promise<MediaList> {
     const mutation = `
       mutation UpdateMediaListEntry(
-        $mediaId: Int!
+        $id: Int
+        $mediaId: Int
         $status: MediaListStatus
         $score: Float
         $progress: Int
@@ -352,6 +354,7 @@ export class AniListClient {
         $completedAt: FuzzyDateInput
       ) {
         SaveMediaListEntry(
+          id: $id
           mediaId: $mediaId
           status: $status
           score: $score
@@ -413,7 +416,7 @@ export class AniListClient {
       }
     `
 
-    const variables = { mediaId, ...updates }
+    const variables = { id, mediaId, ...updates } // Add mediaId to variables
     const data = await this.request<{
       SaveMediaListEntry: MediaList
     }>(mutation, variables)
@@ -423,7 +426,7 @@ export class AniListClient {
 
   async bulkUpdateMediaListEntries(
     updates: Array<{
-      mediaId: number
+      id: number // Changed from mediaId to id
       status?: MediaListStatus
       score?: number
       progress?: number
@@ -446,8 +449,8 @@ export class AniListClient {
 
     for (let i = 0; i < updates.length; i += batchSize) {
       const batch = updates.slice(i, i + batchSize)
-      const batchPromises = batch.map(({ mediaId, ...update }) =>
-        this.updateMediaListEntry(mediaId, update)
+      const batchPromises = batch.map(({ id, ...update }) =>
+        this.updateMediaListEntry(id, update)
       )
 
       try {
@@ -456,12 +459,12 @@ export class AniListClient {
       } catch (error) {
         // If a batch fails, try individual updates
         console.warn(`Batch ${i / batchSize + 1} failed, trying individual updates:`, error)
-        for (const { mediaId, ...update } of batch) {
+        for (const { id, ...update } of batch) {
           try {
-            const result = await this.updateMediaListEntry(mediaId, update)
+            const result = await this.updateMediaListEntry(id, update)
             results.push(result)
           } catch (individualError) {
-            console.error(`Failed to update media ${mediaId}:`, individualError)
+            console.error(`Failed to update media with entry id ${id}:`, individualError)
           }
         }
       }

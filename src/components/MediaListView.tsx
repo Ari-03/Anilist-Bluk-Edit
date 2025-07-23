@@ -121,11 +121,11 @@ export default function MediaListView({ client }: MediaListViewProps) {
     })
   }
 
-  const handleSaveEdit = async (entryId: number) => {
+  const handleSaveEdit = async (entryId: number, mediaId: number) => { // Add mediaId here
     if (!client) return
 
     try {
-      const result = await client.updateMediaListEntry(entryId, editValues)
+      const result = await client.updateMediaListEntry(entryId, mediaId, editValues) // Pass mediaId
       updateMediaListEntry(result)
       setEditingEntry(null)
       setEditValues({})
@@ -313,7 +313,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                         {/* Edit Actions */}
                         <div className="flex justify-end gap-2 mt-2">
                           <button
-                            onClick={() => handleSaveEdit(entry.id)}
+                            onClick={() => handleSaveEdit(entry.id, entry.media.id)} // Pass mediaId
                             className="p-1 text-green-600 hover:bg-green-50 rounded"
                             title="Save"
                           >
@@ -479,7 +479,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                     {editingEntry === entry.id ? (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleSaveEdit(entry.id)}
+                          onClick={() => handleSaveEdit(entry.id, entry.media.id)} // Pass mediaId
                           className="p-1 text-green-600 hover:bg-green-50 rounded"
                           title="Save"
                         >
