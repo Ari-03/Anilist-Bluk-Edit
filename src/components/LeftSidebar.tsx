@@ -47,9 +47,7 @@ const COUNTRIES = [
   { value: 'JP', label: 'Japan' },
   { value: 'KR', label: 'South Korea' },
   { value: 'CN', label: 'China' },
-  { value: 'TW', label: 'Taiwan' },
-  { value: 'US', label: 'United States' },
-  { value: 'OTHER', label: 'Other' }
+  { value: 'TW', label: 'Taiwan' }
 ]
 
 const COMMON_GENRES = [

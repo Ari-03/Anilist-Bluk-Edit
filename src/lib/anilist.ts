@@ -196,6 +196,7 @@ export class AniListClient {
                 }
                 siteUrl
                 isAdult
+                countryOfOrigin
               }
             }
           }
@@ -299,6 +300,7 @@ export class AniListClient {
                 }
                 siteUrl
                 isAdult
+                countryOfOrigin
               }
             }
           }
