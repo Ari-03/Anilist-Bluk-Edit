@@ -4,20 +4,13 @@ import { AniListClient } from '@/lib/anilist'
 import { MediaType, MediaListStatus } from '@/types/anilist'
 import { getStatusColor, getStatusLabel, getScoreDisplay } from '@/lib/anilist'
 import {
-    Grid3X3,
-    List,
     Star,
-    Calendar,
     Play,
     Book,
     ExternalLink,
     Edit3,
-    Trash2,
     Check,
-    X,
-    ArrowUpDown,
-    ArrowUp,
-    ArrowDown
+    X
 } from 'lucide-react'
 
 interface MediaListViewProps {
@@ -35,9 +28,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
         animeLists,
         mangaLists,
         filters,
-        setCurrentType,
-        setCurrentStatus,
-        setFilters,
+        viewMode,
         toggleEntrySelection,
         updateMediaListEntry,
         addNotification,
@@ -46,7 +37,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
         applyFilters
     } = useStore()
 
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [editingEntry, setEditingEntry] = useState<number | null>(null)
     const [editValues, setEditValues] = useState<{
         status?: MediaListStatus
@@ -90,13 +80,9 @@ export default function MediaListView({ client }: MediaListViewProps) {
         }
     }, [filteredEntries.length, user?.mediaListOptions?.scoreFormat])
 
-    // Calculate status counts from the base lists (before status filtering)
-    const baseLists = currentType === MediaType.ANIME ? animeLists : mangaLists
-
     console.log('MediaListView render:', {
         currentType,
         currentStatus,
-        baseListsLength: baseLists.length,
         filteredEntriesLength: filteredEntries.length,
         filteredEntriesPreview: filteredEntries.slice(0, 3).map(e => ({
             id: e.id,
@@ -104,91 +90,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
             status: e.status
         }))
     })
-
-    // Calculate status counts by simulating what each status would show
-    const getFilteredStatusCounts = () => {
-        const simulateFiltersForStatus = (targetStatus: MediaListStatus | 'ALL') => {
-            let lists = baseLists
-
-            // Apply status filter first (same logic as store)
-            if (targetStatus !== 'ALL') {
-                lists = lists.filter(entry => entry.status === targetStatus)
-            }
-
-            // Apply additional status filters from FilterPanel (only if target is 'ALL')
-            if (targetStatus === 'ALL' && filters.status && filters.status.length > 0) {
-                lists = lists.filter(entry =>
-                    entry.status && filters.status!.includes(entry.status)
-                )
-            }
-
-            // Apply other filters (same logic as store)
-            if (filters.format && filters.format.length > 0) {
-                lists = lists.filter(entry =>
-                    entry.media?.format && filters.format!.includes(entry.media.format)
-                )
-            }
-
-            if (filters.genre && filters.genre.length > 0) {
-                lists = lists.filter(entry =>
-                    entry.media?.genres?.some(genre => filters.genre!.includes(genre))
-                )
-            }
-
-            if (filters.year) {
-                lists = lists.filter(entry => {
-                    const year = entry.media?.startDate?.year || entry.media?.seasonYear
-                    if (!year) return false
-                    if (filters.year!.start && year < filters.year!.start) return false
-                    if (filters.year!.end && year > filters.year!.end) return false
-                    return true
-                })
-            }
-
-            if (filters.score) {
-                lists = lists.filter(entry => {
-                    const score = entry.score || 0
-                    if (filters.score!.min && score < filters.score!.min) return false
-                    if (filters.score!.max && score > filters.score!.max) return false
-                    return true
-                })
-            }
-
-            if (filters.search) {
-                const searchLower = filters.search.toLowerCase()
-                lists = lists.filter(entry => {
-                    const title = entry.media?.title
-                    return (
-                        title?.romaji?.toLowerCase().includes(searchLower) ||
-                        title?.english?.toLowerCase().includes(searchLower) ||
-                        title?.native?.toLowerCase().includes(searchLower) ||
-                        title?.userPreferred?.toLowerCase().includes(searchLower)
-                    )
-                })
-            }
-
-            // Apply duplicate removal (same logic as store)
-            const uniqueMap = new Map()
-            lists.forEach(entry => {
-                uniqueMap.set(entry.id, entry)
-            })
-            lists = Array.from(uniqueMap.values())
-
-            return lists.length
-        }
-
-        return {
-            ALL: simulateFiltersForStatus('ALL'),
-            [MediaListStatus.CURRENT]: simulateFiltersForStatus(MediaListStatus.CURRENT),
-            [MediaListStatus.PLANNING]: simulateFiltersForStatus(MediaListStatus.PLANNING),
-            [MediaListStatus.COMPLETED]: simulateFiltersForStatus(MediaListStatus.COMPLETED),
-            [MediaListStatus.DROPPED]: simulateFiltersForStatus(MediaListStatus.DROPPED),
-            [MediaListStatus.PAUSED]: simulateFiltersForStatus(MediaListStatus.PAUSED),
-            [MediaListStatus.REPEATING]: simulateFiltersForStatus(MediaListStatus.REPEATING),
-        }
-    }
-
-    const statusCounts = getFilteredStatusCounts()
 
     const handleQuickEdit = async (entryId: number, field: string, value: any) => {
         if (!client) return
@@ -263,15 +164,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
         return entry.score !== null && entry.score !== undefined && entry.score > 0
     }
 
-    const handleTypeChange = (type: MediaType) => {
-        console.log('Button clicked - changing type to:', type)
-        setCurrentType(type)
-    }
-
-    const handleStatusChange = (status: MediaListStatus | 'ALL') => {
-        console.log('Button clicked - changing status to:', status)
-        setCurrentStatus(status)
-    }
 
     if (!user) {
         return (
@@ -283,105 +175,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
 
     return (
         <div className="space-y-6" key={`${currentType}-${currentStatus}-${filteredEntries.length}`}>
-            {/* Type and View Controls */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                {/* Media Type Tabs */}
-                <div className="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
-                    <button
-                        onClick={() => handleTypeChange(MediaType.ANIME)}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${currentType === MediaType.ANIME
-                            ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                    >
-                        Anime
-                    </button>
-                    <button
-                        onClick={() => handleTypeChange(MediaType.MANGA)}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${currentType === MediaType.MANGA
-                            ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                    >
-                        Manga
-                    </button>
-                </div>
-
-                {/* Controls Container */}
-                <div className="flex items-center gap-4">
-                    {/* Sort Controls */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Sort by:</span>
-                        <select
-                            value={filters.sortBy || 'title'}
-                            onChange={(e) => setFilters({ sortBy: e.target.value as 'title' | 'score' })}
-                            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="title">Title</option>
-                            <option value="score">Score</option>
-                        </select>
-
-                        <button
-                            onClick={() => {
-                                const newOrder = filters.sortOrder === 'asc' ? 'desc' : 'asc'
-                                setFilters({ sortOrder: newOrder })
-                            }}
-                            className="p-1 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-                            title={
-                                filters.sortBy === 'score'
-                                    ? `Currently: ${filters.sortOrder === 'asc' ? 'Low to High' : 'High to Low'} (Click to ${filters.sortOrder === 'asc' ? 'reverse' : 'reset'})`
-                                    : `Currently: ${filters.sortOrder === 'asc' ? 'A-Z' : 'Z-A'} (Click to ${filters.sortOrder === 'asc' ? 'reverse' : 'reset'})`
-                            }
-                        >
-                            {filters.sortOrder === 'asc' ? (
-                                <ArrowUp className="w-4 h-4" />
-                            ) : (
-                                <ArrowDown className="w-4 h-4" />
-                            )}
-                        </button>
-                    </div>
-
-                    {/* View Mode Toggle */}
-                    <div className="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`p-2 rounded-md transition-colors ${viewMode === 'grid'
-                                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                }`}
-                            title="Grid View"
-                        >
-                            <Grid3X3 className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`p-2 rounded-md transition-colors ${viewMode === 'list'
-                                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
-                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                }`}
-                            title="List View"
-                        >
-                            <List className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Status Filter Tabs */}
-            <div className="flex flex-wrap gap-2">
-                {Object.entries(statusCounts).map(([status, count]) => (
-                    <button
-                        key={status}
-                        onClick={() => handleStatusChange(status as MediaListStatus | 'ALL')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${currentStatus === status
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
-                            }`}
-                    >
-                        {status === 'ALL' ? 'All' : getStatusLabel(status as MediaListStatus, currentType)} ({count})
-                    </button>
-                ))}
-            </div>
 
             {/* Entries Grid/List */}
             {filteredEntries.length === 0 ? (

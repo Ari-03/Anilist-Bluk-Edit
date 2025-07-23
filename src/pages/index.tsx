@@ -6,7 +6,7 @@ import { MediaType } from '@/types/anilist'
 import Layout from '@/components/Layout'
 import MediaListView from '@/components/MediaListView'
 import BulkEditPanel from '@/components/BulkEditPanel'
-import FilterPanel from '@/components/FilterPanel'
+import LeftSidebar from '@/components/LeftSidebar'
 import NotificationList from '@/components/NotificationList'
 import DebugPanel from '@/components/DebugPanel'
 import TokenLogin from '@/components/TokenLogin'
@@ -208,29 +208,34 @@ export default function Home() {
                     </div>
                 </header>
 
-                {/* Main Content */}
-                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    {isLoadingLists ? (
-                        <div className="text-center py-12">
-                            <div className="loading-spinner w-8 h-8 mx-auto mb-4"></div>
-                            <p className="text-gray-600 dark:text-gray-400">Loading your media lists...</p>
+                {/* Main Content with Sidebar Layout */}
+                <div className="flex h-[calc(100vh-4rem)]">
+                    {/* Left Sidebar */}
+                    <LeftSidebar />
+
+                    {/* Main Content Area */}
+                    <main className="flex-1 overflow-auto">
+                        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            {isLoadingLists ? (
+                                <div className="text-center py-12">
+                                    <div className="loading-spinner w-8 h-8 mx-auto mb-4"></div>
+                                    <p className="text-gray-600 dark:text-gray-400">Loading your media lists...</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {/* Debug Panel
+                                    <DebugPanel /> */}
+
+                                    {/* Bulk Edit Panel */}
+                                    <BulkEditPanel client={client} />
+
+                                    {/* Media List View */}
+                                    <MediaListView client={client} />
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        <div className="space-y-6">
-                            {/* Debug Panel
-                            <DebugPanel /> */}
-
-                            {/* Filter Panel */}
-                            <FilterPanel />
-
-                            {/* Bulk Edit Panel */}
-                            <BulkEditPanel client={client} />
-
-                            {/* Media List View */}
-                            <MediaListView client={client} />
-                        </div>
-                    )}
-                </main>
+                    </main>
+                </div>
 
                 {/* Notifications */}
                 <NotificationList />

@@ -28,6 +28,7 @@ export interface FilterOptions {
     status?: MediaListStatus[]
     format?: string[]
     genre?: string[]
+    country?: string[]
     year?: { start?: number; end?: number }
     score?: { min?: number; max?: number }
     search?: string
@@ -49,6 +50,7 @@ interface AppState {
     // Current view
     currentType: MediaType
     currentStatus: MediaListStatus | 'ALL'
+    viewMode: 'grid' | 'list'
 
     // Bulk edit
     selectedEntries: Set<number>
@@ -91,6 +93,7 @@ interface AppActions {
     // View actions
     setCurrentType: (type: MediaType) => void
     setCurrentStatus: (status: MediaListStatus | 'ALL') => void
+    setViewMode: (mode: 'grid' | 'list') => void
 
     // Bulk edit actions
     toggleEntrySelection: (entryId: number) => void
@@ -126,6 +129,7 @@ const initialState: AppState = {
     lastDataLoad: null,
     currentType: MediaType.ANIME,
     currentStatus: 'ALL',
+    viewMode: 'grid',
     selectedEntries: new Set(),
     bulkEditMode: false,
     bulkEditOptions: null,
@@ -267,6 +271,10 @@ export const useStore = create<AppState & AppActions>()(
                     // Apply filters immediately after state update
                     get().applyFilters()
                 },
+                setViewMode: (viewMode) => {
+                    console.log('Setting view mode to:', viewMode)
+                    set({ viewMode })
+                },
 
                 // Bulk edit actions
                 toggleEntrySelection: (entryId) => {
@@ -357,6 +365,14 @@ export const useStore = create<AppState & AppActions>()(
                             if (filters.year!.start && year < filters.year!.start) return false
                             if (filters.year!.end && year > filters.year!.end) return false
                             return true
+                        })
+                    }
+
+                    if (filters.country && filters.country.length > 0) {
+                        lists = lists.filter(entry => {
+                            const country = entry.media?.countryOfOrigin
+                            if (!country) return false
+                            return filters.country!.includes(country)
                         })
                     }
 
