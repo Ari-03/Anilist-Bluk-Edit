@@ -32,6 +32,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
     viewMode,
     toggleEntrySelection,
     updateMediaListEntry,
+    removeMediaListEntry,
     addNotification,
     setError,
     getCurrentLists,
@@ -149,14 +150,11 @@ export default function MediaListView({ client }: MediaListViewProps) {
     if (window.confirm('Are you sure you want to delete this entry?')) {
       try {
         await client.deleteMediaListEntry(entryId);
-        // You'll need a way to remove the entry from the local state as well
-        // This depends on how your store is set up. For now, we'll just show a notification.
+        removeMediaListEntry(entryId) // This will update the store
         addNotification({
           type: 'success',
           message: 'Entry deleted successfully'
         });
-        // Ideally, you would call a function here to remove the entry from the store
-        // and re-render the list.
       } catch (error) {
         console.error('Failed to delete entry:', error);
         addNotification({
