@@ -32,6 +32,7 @@ export class RateLimiter {
         currentQueueSize: 0
     }
     private processing = false
+    private stopped = false
 
     constructor(config: Partial<RateLimiterConfig> = {}) {
         this.config = {
@@ -129,6 +130,12 @@ export class RateLimiter {
         }
 
         this.processing = false
+    }
+
+    stop(): void {
+        console.log('Rate limiter stop signal received.')
+        this.stopped = true
+        this.requestQueue = [] // Clear the queue
     }
 
     private async waitForRateLimit(): Promise<void> {
@@ -233,6 +240,10 @@ export class RateLimiter {
             averageResponseTime: 0,
             currentQueueSize: 0
         }
+    }
+
+    isStopped(): boolean {
+        return this.stopped
     }
 
     // Debug method to check current rate limiting state

@@ -169,32 +169,40 @@ export const useStore = create<AppState & AppActions>()(
                 setAnimeLists: (animeLists) => {
                     console.log('Setting anime lists:', animeLists.length, 'entries')
 
-                    // Check for duplicates in source data
-                    const ids = animeLists.map(entry => entry.id)
-                    const uniqueIds = new Set(ids)
-                    if (ids.length !== uniqueIds.size) {
-                        console.warn('🚨 Duplicate anime entries detected in source data')
-                        const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index)
-                        console.warn('Duplicate anime IDs:', duplicateIds)
+                    // De-duplicate lists before storing to prevent issues
+                    const uniqueMap = new Map<number, MediaList>()
+                    animeLists.forEach(entry => {
+                        if (!uniqueMap.has(entry.id)) {
+                            uniqueMap.set(entry.id, entry)
+                        }
+                    })
+                    const uniqueAnimeLists = Array.from(uniqueMap.values())
+
+                    if (uniqueAnimeLists.length < animeLists.length) {
+                        console.warn(`🚨 Removed ${animeLists.length - uniqueAnimeLists.length} duplicate anime entries.`)
                     }
 
-                    set({ animeLists })
+                    set({ animeLists: uniqueAnimeLists })
                     // Apply filters immediately after state update
                     get().applyFilters()
                 },
                 setMangaLists: (mangaLists) => {
                     console.log('Setting manga lists:', mangaLists.length, 'entries')
 
-                    // Check for duplicates in source data
-                    const ids = mangaLists.map(entry => entry.id)
-                    const uniqueIds = new Set(ids)
-                    if (ids.length !== uniqueIds.size) {
-                        console.warn('🚨 Duplicate manga entries detected in source data')
-                        const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index)
-                        console.warn('Duplicate manga IDs:', duplicateIds)
+                    // De-duplicate lists before storing
+                    const uniqueMap = new Map<number, MediaList>()
+                    mangaLists.forEach(entry => {
+                        if (!uniqueMap.has(entry.id)) {
+                            uniqueMap.set(entry.id, entry)
+                        }
+                    })
+                    const uniqueMangaLists = Array.from(uniqueMap.values())
+
+                    if (uniqueMangaLists.length < mangaLists.length) {
+                        console.warn(`🚨 Removed ${mangaLists.length - uniqueMangaLists.length} duplicate manga entries.`)
                     }
 
-                    set({ mangaLists })
+                    set({ mangaLists: uniqueMangaLists })
                     // Apply filters immediately after state update
                     get().applyFilters()
                 },

@@ -58,6 +58,8 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         initialRetryDelay: 1000    // Start with shorter delay, exponential backoff will increase it
     })
 
+    const [isCancelling, setIsCancelling] = useState(false)
+
     const rateLimiterRef = useRef<RateLimiter | null>(null)
 
     // Get score range based on user's score format
@@ -126,6 +128,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         }
 
         setIsProcessing(true)
+        setIsCancelling(false) // Reset cancelling state
         const selectedMediaLists = getSelectedEntries()
         const totalEntries = selectedMediaLists.length
         setProcessProgress({ current: 0, total: totalEntries, successful: 0, failed: 0 })
@@ -146,6 +149,12 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
 
             // Process each update through the rate limiter
             for (let i = 0; i < selectedMediaLists.length; i++) {
+                if (rateLimiterRef.current?.isStopped()) {
+                    console.log('Bulk edit cancelled by user.')
+                    addNotification({ type: 'warning', message: 'Bulk edit cancelled.' })
+                    break // Exit the loop if stopped
+                }
+
                 const entry = selectedMediaLists[i]
                 
                 try {
@@ -215,6 +224,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
             })
         } finally {
             setIsProcessing(false)
+            setIsCancelling(false)
             setProcessProgress({ current: 0, total: 0, successful: 0, failed: 0 })
         }
     }
@@ -635,13 +645,21 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => {
-                                    setBulkEditMode(false)
-                                    clearSelection()
+                                    if (isProcessing) {
+                                        if (rateLimiterRef.current) {
+                                            rateLimiterRef.current.stop()
+                                        }
+                                        setIsCancelling(true)
+                                        addNotification({ type: 'info', message: 'Cancelling bulk edit... The current item will finish processing.' })
+                                    } else {
+                                        setBulkEditMode(false)
+                                        clearSelection()
+                                    }
                                 }}
                                 className="btn-secondary"
-                                disabled={isProcessing}
+                                disabled={isCancelling}
                             >
-                                Cancel
+                                {isProcessing ? (isCancelling ? 'Cancelling...' : 'Cancel') : 'Cancel'}
                             </button>
                             <button
                                 onClick={handleBulkOperation}
