@@ -317,9 +317,9 @@ export class AniListClient {
   }
 
   async updateMediaListEntry(
-    id: number,
-    mediaId: number, // Add mediaId here
+    mediaId: number, // Changed to mediaId
     updates: Partial<{
+      id?: number
       status: MediaListStatus
       score: number
       progress: number
@@ -416,7 +416,7 @@ export class AniListClient {
       }
     `
 
-    const variables = { id, mediaId, ...updates } // Add mediaId to variables
+    const variables = { mediaId, ...updates } // Use mediaId directly
     const data = await this.request<{
       SaveMediaListEntry: MediaList
     }>(mutation, variables)
@@ -424,133 +424,58 @@ export class AniListClient {
     return data.SaveMediaListEntry
   }
 
-  private buildBatchedMutation(
-    updates: Array<{
-      id: number
-      mediaId: number
-      status?: MediaListStatus
-      score?: number
-      progress?: number
-      progressVolumes?: number
-      repeat?: number
-      priority?: number
-      private?: boolean
-      notes?: string
-      hiddenFromStatusLists?: boolean
-      customLists?: string[]
-      advancedScores?: Record<string, number>
-      startedAt?: { year?: number; month?: number; day?: number }
-      completedAt?: { year?: number; month?: number; day?: number }
+  async updateMediaListEntries(
+    ids: number[],
+    updates: Partial<{
+      status: MediaListStatus
+      score: number
+      progress: number
+      private: boolean
+      notes: string
+      hiddenFromStatusLists: boolean
     }>
-  ): { mutation: string; variables: Record<string, any> } {
-    const mutations: string[] = []
-    const variables: Record<string, any> = {}
-
-    updates.forEach((update, index) => {
-      const alias = `update${index}`
-      const variablePrefix = `${alias}_`
-
-      // Build the mutation for this entry
-      const mutationArgs: string[] = []
-      const mutationFields: string[] = []
-
-      // Add id and mediaId
-      mutationArgs.push(`id: $${variablePrefix}id`)
-      mutationArgs.push(`mediaId: $${variablePrefix}mediaId`)
-      variables[`${variablePrefix}id`] = update.id
-      variables[`${variablePrefix}mediaId`] = update.mediaId
-
-      // Add other fields dynamically
-      Object.entries(update).forEach(([key, value]) => {
-        if (key !== 'id' && key !== 'mediaId' && value !== undefined) {
-          mutationArgs.push(`${key}: $${variablePrefix}${key}`)
-          variables[`${variablePrefix}${key}`] = value
-        }
-      })
-
-      // Build the mutation string
-      mutations.push(`
-        ${alias}: SaveMediaListEntry(${mutationArgs.join(', ')}) {
+  ): Promise<MediaList[]> {
+    const mutation = `
+      mutation UpdateMediaListEntries(
+        $ids: [Int]
+        $status: MediaListStatus
+        $score: Float
+        $progress: Int
+        $private: Boolean
+        $notes: String
+        $hiddenFromStatusLists: Boolean
+      ) {
+        UpdateMediaListEntries(
+          ids: $ids
+          status: $status
+          score: $score
+          progress: $progress
+          private: $private
+          notes: $notes
+          hiddenFromStatusLists: $hiddenFromStatusLists
+        ) {
           id
           mediaId
           status
           score
           progress
-          progressVolumes
-          repeat
-          priority
-          private
-          notes
-          hiddenFromStatusLists
-          customLists
-          advancedScores
-          startedAt {
-            year
-            month
-            day
-          }
-          completedAt {
-            year
-            month
-            day
-          }
           updatedAt
           media {
             id
             title {
-              romaji
-              english
-              native
               userPreferred
-            }
-            type
-            format
-            episodes
-            chapters
-            volumes
-            coverImage {
-              large
-              medium
             }
           }
         }
-      `)
-    })
-
-    // Build variable definitions for the query
-    const variableDefinitions: string[] = []
-    Object.keys(variables).forEach(varName => {
-      const value = variables[varName]
-      let type = 'String'
-      
-      if (varName.endsWith('_id') || varName.endsWith('_mediaId')) {
-        type = 'Int'
-      } else if (varName.endsWith('_score')) {
-        type = 'Float'
-      } else if (varName.endsWith('_progress') || varName.endsWith('_progressVolumes') || varName.endsWith('_repeat') || varName.endsWith('_priority')) {
-        type = 'Int'
-      } else if (varName.endsWith('_private') || varName.endsWith('_hiddenFromStatusLists')) {
-        type = 'Boolean'
-      } else if (varName.endsWith('_status')) {
-        type = 'MediaListStatus'
-      } else if (varName.endsWith('_customLists')) {
-        type = '[String]'
-      } else if (varName.endsWith('_advancedScores')) {
-        type = '[Float]'
-      } else if (varName.endsWith('_startedAt') || varName.endsWith('_completedAt')) {
-        type = 'FuzzyDateInput'
-      }
-      
-      variableDefinitions.push(`$${varName}: ${type}`)
-    })
-
-    const mutation = `
-      mutation BatchUpdateMediaListEntries(${variableDefinitions.join(', ')}) {
-        ${mutations.join('\n')}
       }
     `
 
-    return { mutation, variables }
+    const variables = { ids, ...updates }
+    const data = await this.request<{
+      UpdateMediaListEntries: MediaList[]
+    }>(mutation, variables)
+
+    return data.UpdateMediaListEntries
   }
 
   private isRateLimitError(error: any): boolean {
@@ -584,150 +509,7 @@ export class AniListClient {
     return new Promise(resolve => setTimeout(resolve, ms))
   }
 
-  async bulkUpdateMediaListEntries(
-    updates: Array<{
-      id: number
-      mediaId: number
-      status?: MediaListStatus
-      score?: number
-      progress?: number
-      progressVolumes?: number
-      repeat?: number
-      priority?: number
-      private?: boolean
-      notes?: string
-      hiddenFromStatusLists?: boolean
-      customLists?: string[]
-      advancedScores?: Record<string, number>
-      startedAt?: { year?: number; month?: number; day?: number }
-      completedAt?: { year?: number; month?: number; day?: number }
-    }>,
-    progressCallback?: (progress: {
-      processed: number
-      total: number
-      successful: number
-      failed: number
-      rateLimited: number
-      currentBatch: number
-    }) => void,
-    rateLimiterRef?: { current: any } // Reference to rate limiter for stats tracking
-  ): Promise<MediaList[]> {
-    const results: MediaList[] = []
-    const batchSize = 10 // Conservative batch size for better rate limit compliance and progress tracking
-    const totalEntries = updates.length
-    let processedCount = 0
-    let successfulCount = 0
-    let failedCount = 0
-    let rateLimitedCount = 0
-
-    for (let i = 0; i < updates.length; i += batchSize) {
-      const batch = updates.slice(i, i + batchSize)
-      let batchSuccess = false
-      const maxRetries = 5
-      const retryDelays = [4000, 8000, 15000, 30000, 60000] // 4s, 8s, 15s, 30s, 60s
-      
-      // Retry loop with custom delay sequence for rate limit errors
-      for (let retryCount = 0; retryCount <= maxRetries && !batchSuccess; retryCount++) {
-        try {
-          // Use GraphQL batching for this batch
-          const { mutation, variables } = this.buildBatchedMutation(batch)
-          const data = await this.request<Record<string, MediaList>>(mutation, variables)
-          
-          // Extract results from the batched response and handle partial failures
-          const batchResults: (MediaList | null)[] = []
-          batch.forEach((_, index) => {
-            const alias = `update${index}`
-            const result = data[alias]
-            if (result) {
-              batchResults.push(result)
-            } else {
-              console.warn(`Batch update failed for entry at index ${index}`)
-              batchResults.push(null)
-            }
-          })
-          
-          const successfulResults = batchResults.filter((result): result is MediaList => result !== null)
-          results.push(...successfulResults)
-          
-          // Update batch stats
-          successfulCount += successfulResults.length
-          failedCount += (batch.length - successfulResults.length)
-          processedCount += batch.length
-          
-          batchSuccess = true
-          
-        } catch (error: any) {
-          // Check if this is a rate limit error and we have retries left
-          if (this.isRateLimitError(error) && retryCount < maxRetries) {
-            rateLimitedCount += batch.length // Track rate limited entries
-            
-            // Update rate limiter stats if available
-            if (rateLimiterRef?.current) {
-              rateLimiterRef.current.stats.rateLimitHits++
-              rateLimiterRef.current.stats.retriedRequests++
-            }
-            
-            const delay = retryDelays[retryCount]
-            console.warn(`Rate limit hit on batch ${i / batchSize + 1}, waiting ${delay}ms before retry (attempt ${retryCount + 1}/${maxRetries + 1})`)
-            await this.delay(delay)
-            continue // Retry the batch
-          }
-          
-          // If not a rate limit error or no retries left, fall back to individual updates
-          console.warn(`GraphQL batch ${i / batchSize + 1} failed after ${retryCount} retries, falling back to individual updates:`, error)
-          
-          // Check if this is a GraphQL error with partial results
-          if (error.graphQLErrors) {
-            console.warn('GraphQL errors in batch:', error.graphQLErrors)
-          }
-          
-          // Fallback to individual updates if batch fails completely
-          let batchSuccessful = 0
-          let batchFailed = 0
-          
-          for (const { id, mediaId, ...update } of batch) {
-            try {
-              const result = await this.updateMediaListEntry(id, mediaId, update)
-              results.push(result)
-              batchSuccessful++
-              
-              // Add small delay between individual fallback requests
-              await new Promise((resolve) => setTimeout(resolve, 100))
-            } catch (individualError) {
-              console.error(`Failed to update media with entry id ${id}:`, individualError)
-              batchFailed++
-            }
-          }
-          
-          // Update stats for fallback processing
-          successfulCount += batchSuccessful
-          failedCount += batchFailed
-          processedCount += batch.length
-          
-          batchSuccess = true // Mark as "handled" to exit retry loop
-        }
-      }
-      
-      // Call progress callback after each batch
-      if (progressCallback) {
-        progressCallback({
-          processed: processedCount,
-          total: totalEntries,
-          successful: successfulCount,
-          failed: failedCount,
-          rateLimited: rateLimitedCount,
-          currentBatch: Math.floor(i / batchSize) + 1
-        })
-      }
-
-      // Small delay between batches to respect rate limits
-      if (i + batchSize < updates.length) {
-        await new Promise((resolve) => setTimeout(resolve, 500)) // Reduced delay since batches are more efficient
-      }
-    }
-
-    return results
-  }
+  
 
   async deleteMediaListEntry(id: number): Promise<{ deleted: boolean }> {
     const mutation = `

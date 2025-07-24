@@ -135,65 +135,73 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         const totalEntries = selectedMediaLists.length
         setProcessProgress({ current: 0, total: totalEntries, successful: 0, failed: 0 })
 
+        // Separate entries into existing and new
+        const existingEntries = selectedMediaLists.filter(entry => entry.id)
+        const newEntries = selectedMediaLists.filter(entry => !entry.id)
+
         // Initialize rate limiter with current config
         rateLimiterRef.current = new RateLimiter(rateLimiterConfig)
 
-        // Track results accurately
         let successfulCount = 0
         let failedCount = 0
-        let processedCount = 0
 
         try {
             addNotification({
                 type: 'info',
-                message: `Starting bulk update of ${totalEntries} entries with GraphQL batching...`
+                message: `Starting bulk update of ${totalEntries} entries...`
             })
 
-            // Prepare batch updates
-            const batchUpdates = selectedMediaLists.map(entry => {
-                const entryUpdates = { ...updates }
-                
-                // Validate progress if being updated
-                if (entryUpdates.progress !== undefined) {
-                    const maxProgress = entry.media?.episodes || entry.media?.chapters
-                    if (maxProgress && entryUpdates.progress > maxProgress) {
-                        entryUpdates.progress = maxProgress
-                    }
-                }
-
-                return {
-                    id: entry.id,
-                    mediaId: entry.mediaId,
-                    ...entryUpdates
-                }
-            })
-
-            // Execute bulk update through rate limiter with progress callback
-            const results = await rateLimiterRef.current.execute(async () => {
-                return await client.bulkUpdateMediaListEntries(batchUpdates, (progress) => {
-                    // Update progress in real-time as batches complete
-                    setProcessProgress({ 
-                        current: progress.processed, 
-                        total: progress.total, 
-                        successful: progress.successful, 
-                        failed: progress.failed 
+            // Process existing entries in bulk
+            if (existingEntries.length > 0) {
+                const entryIds = existingEntries.map(entry => entry.id)
+                try {
+                    const results = await rateLimiterRef.current.execute(async () => {
+                        return await client.updateMediaListEntries(entryIds, updates)
                     })
-                    
-                    // Update running totals
-                    successfulCount = progress.successful
-                    failedCount = progress.failed
-                    processedCount = progress.processed
-                    
-                    // Update rate limiter stats display
-                    if (rateLimiterRef.current) {
-                        setRateLimiterStats(rateLimiterRef.current.getStats())
-                    }
-                }, rateLimiterRef)
-            })
+                    successfulCount += results.length
+                    failedCount += existingEntries.length - results.length
 
-            // Update store with successful results
-            results.forEach(result => {
-                updateMediaListEntry(result)
+                    results.forEach(result => {
+                        updateMediaListEntry(result)
+                    })
+                } catch (error: any) {
+                    console.error('Bulk update for existing entries failed:', error)
+                    failedCount += existingEntries.length
+                    addNotification({
+                        type: 'error',
+                        message: `Failed to update ${existingEntries.length} existing entries. ${error.message || 'Please try again.'}`
+                    })
+                }
+            }
+
+            // Process new entries individually
+            if (newEntries.length > 0) {
+                for (const entry of newEntries) {
+                    if (isCancelling) break
+                    try {
+                        const result = await rateLimiterRef.current.execute(async () => {
+                            return await client.updateMediaListEntry(entry.mediaId, updates)
+                        })
+                        successfulCount++
+                        updateMediaListEntry(result)
+                    } catch (error: any) {
+                        console.error(`Failed to add new entry ${entry.media.title.userPreferred}:`, error)
+                        failedCount++
+                    }
+                    setProcessProgress({ 
+                        current: successfulCount + failedCount, 
+                        total: totalEntries, 
+                        successful: successfulCount, 
+                        failed: failedCount 
+                    })
+                }
+            }
+
+            setProcessProgress({ 
+                current: totalEntries, 
+                total: totalEntries, 
+                successful: successfulCount, 
+                failed: failedCount 
             })
 
             // Update stats display
@@ -224,16 +232,16 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
             clearSelection()
             setBulkEditMode(false)
 
-        } catch (error) {
-            console.error('Bulk update failed:', error)
+        } catch (error: any) {
+            console.error('Bulk update failed:', error);
+            console.error('Error details:', JSON.stringify(error, null, 2));
             addNotification({
                 type: 'error',
-                message: 'Bulk update failed. Please try again.'
+                message: `Bulk update failed. ${error.message || 'Please try again.'}`
             })
         } finally {
             setIsProcessing(false)
             setIsCancelling(false)
-            setProcessProgress({ current: 0, total: 0, successful: 0, failed: 0 })
         }
     }
 

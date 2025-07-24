@@ -16,6 +16,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    console.log('Forwarding request to AniList with variables:', JSON.stringify(variables, null, 2));
+
     const response = await fetch('https://graphql.anilist.co', {
       method: 'POST',
       headers: {
@@ -33,6 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Handle rate limiting and other HTTP errors properly
     if (!response.ok) {
+      console.error('AniList API Error Response:', JSON.stringify(data, null, 2));
       // Return the full error response with proper status code
       return res.status(response.status).json({
         error: 'AniList API error',
