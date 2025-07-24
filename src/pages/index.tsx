@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { useAuth } from '@/contexts/AuthContext'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
@@ -171,10 +172,12 @@ export default function Home() {
                                 </h1>
                                 {user && (
                                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                        <img
+                                        <Image
                                             src={user.avatar?.medium || '/default-avatar.png'}
                                             alt={user.name}
-                                            className="w-6 h-6 rounded-full"
+                                            width={24}
+                                            height={24}
+                                            className="rounded-full"
                                         />
                                         <span>{user.name}</span>
                                     </div>

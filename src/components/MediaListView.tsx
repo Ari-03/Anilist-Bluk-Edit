@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { MediaType, MediaListStatus } from '@/types/anilist'
@@ -251,10 +252,11 @@ export default function MediaListView({ client }: MediaListViewProps) {
                   {/* Cover Image */}
                   <div className="aspect-[3/4] relative bg-gray-200 dark:bg-gray-700">
                     {entry.media?.coverImage?.large && (
-                      <img
+                      <Image
                         src={entry.media.coverImage.large}
                         alt={entry.media.title?.userPreferred || 'Cover'}
-                        className="w-full h-full object-cover"
+                        layout="fill"
+                        objectFit="cover"
                       />
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
@@ -404,10 +406,11 @@ export default function MediaListView({ client }: MediaListViewProps) {
                   {/* Cover Thumbnail */}
                   <div className="w-12 h-16 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden flex-shrink-0">
                     {entry.media?.coverImage?.medium && (
-                      <img
+                      <Image
                         src={entry.media.coverImage.medium}
                         alt={entry.media.title?.userPreferred || 'Cover'}
-                        className="w-full h-full object-cover"
+                        layout="fill"
+                        objectFit="cover"
                       />
                     )}
                   </div>
