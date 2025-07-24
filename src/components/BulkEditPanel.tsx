@@ -52,10 +52,10 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
     const [processProgress, setProcessProgress] = useState({ current: 0, total: 0, successful: 0, failed: 0 })
     const [rateLimiterStats, setRateLimiterStats] = useState<RateLimiterStats | null>(null)
     const [rateLimiterConfig, setRateLimiterConfig] = useState({
-        maxRequestsPerSecond: 0.4, // Very conservative for 30 req/min limit (24/min = 0.4/sec)
-        maxConcurrentRequests: 1,  // Single request at a time to be safest
-        maxRetries: 5,             // More retries with better backoff
-        initialRetryDelay: 1000    // Start with shorter delay, exponential backoff will increase it
+        maxRequestsPerSecond: 0.5, // Optimized for GraphQL batching - each request now handles 15+ updates
+        maxConcurrentRequests: 1,  // Single batched request at a time
+        maxRetries: 3,             // Fewer retries since batching reduces overall requests
+        initialRetryDelay: 2000    // Longer initial delay for batched operations
     })
 
     const [isCancelling, setIsCancelling] = useState(false)
@@ -144,54 +144,59 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         try {
             addNotification({
                 type: 'info',
-                message: `Starting bulk update of ${totalEntries} entries with rate limiting...`
+                message: `Starting bulk update of ${totalEntries} entries with GraphQL batching...`
             })
 
-            // Process each update through the rate limiter
-            for (let i = 0; i < selectedMediaLists.length; i++) {
-                if (rateLimiterRef.current?.isStopped()) {
-                    console.log('Bulk edit cancelled by user.')
-                    addNotification({ type: 'warning', message: 'Bulk edit cancelled.' })
-                    break // Exit the loop if stopped
-                }
-
-                const entry = selectedMediaLists[i]
+            // Prepare batch updates
+            const batchUpdates = selectedMediaLists.map(entry => {
+                const entryUpdates = { ...updates }
                 
-                try {
-                    // Validate progress if being updated
-                    const entryUpdates = { ...updates }
-                    if (entryUpdates.progress !== undefined) {
-                        const maxProgress = entry.media?.episodes || entry.media?.chapters
-                        if (maxProgress && entryUpdates.progress > maxProgress) {
-                            entryUpdates.progress = maxProgress
-                        }
+                // Validate progress if being updated
+                if (entryUpdates.progress !== undefined) {
+                    const maxProgress = entry.media?.episodes || entry.media?.chapters
+                    if (maxProgress && entryUpdates.progress > maxProgress) {
+                        entryUpdates.progress = maxProgress
                     }
+                }
 
-                    const result = await rateLimiterRef.current.execute(async () => {
-                        return await client.updateMediaListEntry(entry.id, entry.mediaId, entryUpdates)
+                return {
+                    id: entry.id,
+                    mediaId: entry.mediaId,
+                    ...entryUpdates
+                }
+            })
+
+            // Execute bulk update through rate limiter with progress callback
+            const results = await rateLimiterRef.current.execute(async () => {
+                return await client.bulkUpdateMediaListEntries(batchUpdates, (progress) => {
+                    // Update progress in real-time as batches complete
+                    setProcessProgress({ 
+                        current: progress.processed, 
+                        total: progress.total, 
+                        successful: progress.successful, 
+                        failed: progress.failed 
                     })
+                    
+                    // Update running totals
+                    successfulCount = progress.successful
+                    failedCount = progress.failed
+                    processedCount = progress.processed
+                    
+                    // Update rate limiter stats display
+                    if (rateLimiterRef.current) {
+                        setRateLimiterStats(rateLimiterRef.current.getStats())
+                    }
+                }, rateLimiterRef)
+            })
 
-                    updateMediaListEntry(result)
-                    successfulCount++
+            // Update store with successful results
+            results.forEach(result => {
+                updateMediaListEntry(result)
+            })
 
-                } catch (error) {
-                    console.error(`Failed to update entry ${entry.id}:`, error)
-                    failedCount++
-                }
-
-                // Increment progress after each entry is processed (success or failure)
-                processedCount++
-                setProcessProgress({ 
-                    current: processedCount, 
-                    total: totalEntries, 
-                    successful: successfulCount, 
-                    failed: failedCount 
-                })
-                
-                // Update stats display
-                if (rateLimiterRef.current) {
-                    setRateLimiterStats(rateLimiterRef.current.getStats())
-                }
+            // Update stats display
+            if (rateLimiterRef.current) {
+                setRateLimiterStats(rateLimiterRef.current.getStats())
             }
 
             const finalStats = rateLimiterRef.current?.getStats()
