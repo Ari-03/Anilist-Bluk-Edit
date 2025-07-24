@@ -44,6 +44,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         score: '',
         progress: '',
         private: '',
+        hiddenFromStatusLists: '',
         notes: '',
         customLists: {} as Record<string, boolean>
     })
@@ -108,6 +109,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         if (bulkOptions.score) updates.score = parseFloat(bulkOptions.score)
         if (bulkOptions.progress) updates.progress = parseInt(bulkOptions.progress)
         if (bulkOptions.private !== '') updates.private = bulkOptions.private === 'true'
+        if (bulkOptions.hiddenFromStatusLists !== '') updates.hiddenFromStatusLists = bulkOptions.hiddenFromStatusLists === 'true'
         if (bulkOptions.notes.trim()) updates.notes = bulkOptions.notes
 
         // Handle custom lists - convert to array format expected by API
@@ -215,6 +217,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                 score: '',
                 progress: '',
                 private: '',
+                hiddenFromStatusLists: '',
                 notes: '',
                 customLists: {}
             })
@@ -381,6 +384,22 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                     <option value="">No change</option>
                                     <option value="false">Public</option>
                                     <option value="true">Private</option>
+                                </select>
+                            </div>
+
+                            {/* Hide from Status List */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Hide from Status List
+                                </label>
+                                <select
+                                    value={bulkOptions.hiddenFromStatusLists}
+                                    onChange={(e) => setBulkOptions(prev => ({ ...prev, hiddenFromStatusLists: e.target.value }))}
+                                    className="select"
+                                >
+                                    <option value="">No change</option>
+                                    <option value="false">Show in Status List</option>
+                                    <option value="true">Hide from Status List</option>
                                 </select>
                             </div>
 
