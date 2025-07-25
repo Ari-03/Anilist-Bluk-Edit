@@ -57,75 +57,10 @@ export default function Home() {
 
     // Load user data and media lists
     useEffect(() => {
-        const loadUserData = async () => {
-            if (!client || !accessToken) {
-                console.log('No client or access token, skipping load')
-                return
-            }
-
-            // Check if we should reload data
-            if (!shouldReloadData()) {
-                console.log('Data is fresh, skipping reload. Current data:', {
-                    animeCount: animeLists.length,
-                    mangaCount: mangaLists.length
-                })
-
-                // Still set user if we don't have it but have data
-                if (!user && (animeLists.length > 0 || mangaLists.length > 0)) {
-                    try {
-                        const userData = await client.getCurrentUser()
-                        setUser(userData)
-                        console.log('Updated user data without reloading lists')
-                    } catch (error) {
-                        console.error('Failed to load user data:', error)
-                    }
-                }
-                return
-            }
-
-            console.log('Loading user data...', { hasUser: !!user, shouldReload: shouldReloadData() })
-
-            try {
-                setIsLoadingLists(true)
-
-                // Use auth user data or store user data
-                let userData = authUser || user
-                if (!userData) {
-                    userData = await client.getCurrentUser()
-                    console.log('Got user data:', userData.name)
-                }
-                setUser(userData)
-                console.log('Using user data:', userData.name)
-
-                // Load both anime and manga lists
-                const [animeListsData, mangaListsData] = await Promise.all([
-                    client.getAllMediaLists(userData.id, MediaType.ANIME),
-                    client.getAllMediaLists(userData.id, MediaType.MANGA),
-                ])
-
-                console.log('Loaded lists:', { anime: animeListsData.length, manga: mangaListsData.length })
-                setAnimeLists(animeListsData)
-                setMangaLists(mangaListsData)
-                setLastDataLoad(Date.now())
-
-                addNotification({
-                    type: 'success',
-                    message: `Welcome back, ${userData.name}! Loaded ${animeListsData.length} anime and ${mangaListsData.length} manga entries.`,
-                })
-            } catch (error) {
-                console.error('Failed to load user data:', error)
-                setError(error instanceof Error ? error.message : 'Failed to load user data')
-                addNotification({
-                    type: 'error',
-                    message: 'Failed to load your media lists. Please try refreshing the page.',
-                })
-            } finally {
-                setIsLoadingLists(false)
-            }
+        if (client && authUser) {
+            useStore.getState().fetchMediaLists(authUser.id, currentType)
         }
-
-        loadUserData()
-    }, [client, accessToken, authUser, shouldReloadData])
+    }, [client, authUser, currentType])
 
     // Apply dark mode class to document
     useEffect(() => {

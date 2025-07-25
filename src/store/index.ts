@@ -89,6 +89,7 @@ interface AppActions {
     setIsLoadingLists: (loading: boolean) => void
     setLastDataLoad: (timestamp: number) => void
     shouldReloadData: () => boolean
+    fetchMediaLists: (userId: number, type: MediaType, force?: boolean) => Promise<void>
 
     // View actions
     setCurrentType: (type: MediaType) => void
@@ -260,6 +261,44 @@ export const useStore = create<AppState & AppActions>()(
                         hasTimestamp
                     })
                     return true
+                },
+
+                fetchMediaLists: async (userId, type, force = false) => {
+                    const state = get()
+                    if (!force && !state.shouldReloadData()) {
+                        console.log('Data is fresh, skipping reload.')
+                        return
+                    }
+
+                    console.log('Fetching media lists...', { userId, type, force })
+                    set({ isLoadingLists: true })
+
+                    try {
+                        const client = new (require('@/lib/anilist').AniListClient)(state.accessToken)
+                        const [animeListsData, mangaListsData] = await Promise.all([
+                            client.getAllMediaLists(userId, MediaType.ANIME),
+                            client.getAllMediaLists(userId, MediaType.MANGA),
+                        ])
+
+                        set({
+                            animeLists: animeListsData,
+                            mangaLists: mangaListsData,
+                            lastDataLoad: Date.now(),
+                            isLoadingLists: false,
+                        })
+
+                        get().addNotification({
+                            type: 'success',
+                            message: `Successfully loaded ${animeListsData.length} anime and ${mangaListsData.length} manga entries.`,
+                        })
+                    } catch (error) {
+                        console.error('Failed to fetch media lists:', error)
+                        set({ error: error instanceof Error ? error.message : 'Failed to load lists', isLoadingLists: false })
+                        get().addNotification({
+                            type: 'error',
+                            message: 'Failed to refresh your media lists. Please try again.',
+                        })
+                    }
                 },
 
                 // View actions

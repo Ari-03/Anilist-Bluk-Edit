@@ -219,6 +219,11 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                 message: `Bulk update completed: ${successfulCount} successful, ${failedCount} failed${finalStats ? `. Rate limit hits: ${finalStats.rateLimitHits}, Retries: ${finalStats.retriedRequests}` : ''}`
             })
 
+            // Re-fetch the entire list to ensure data consistency
+            if (user) {
+                useStore.getState().fetchMediaLists(user.id, currentType, true)
+            }
+
             // Reset form and selection
             setBulkOptions({
                 status: '',

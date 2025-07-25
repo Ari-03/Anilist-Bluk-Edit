@@ -397,19 +397,7 @@ export class AniListClient {
           media {
             id
             title {
-              romaji
-              english
-              native
               userPreferred
-            }
-            type
-            format
-            episodes
-            chapters
-            volumes
-            coverImage {
-              large
-              medium
             }
           }
         }

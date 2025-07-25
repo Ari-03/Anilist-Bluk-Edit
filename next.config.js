@@ -3,7 +3,12 @@ const nextConfig = {
     reactStrictMode: true,
     swcMinify: true,
     images: {
-        domains: ['s4.anilist.co', 'media.anilist.co'],
+        remotePatterns: [
+            {
+                protocol: 'https',
+                hostname: 's4.anilist.co',
+            },
+        ],
     },
 }
 
