@@ -99,7 +99,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
 
     try {
       const updates = { [field]: value }
-      const result = await client.updateMediaListEntry(entryId, mediaId, updates)
+      const result = await client.updateMediaListEntry(mediaId, updates)
       updateMediaListEntry(result)
       addNotification({
         type: 'success',
@@ -128,7 +128,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
     if (!client) return
 
     try {
-      const result = await client.updateMediaListEntry(entryId, mediaId, editValues)
+      const result = await client.updateMediaListEntry(mediaId, editValues)
       updateMediaListEntry(result)
       setEditingEntry(null)
       setEditValues({})

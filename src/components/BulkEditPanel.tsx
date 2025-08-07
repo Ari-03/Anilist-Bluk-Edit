@@ -99,6 +99,12 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
 
     const availableCustomLists = getAvailableCustomLists()
 
+    const chunk = <T,>(arr: T[], size: number): T[][] =>
+        Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+            arr.slice(i * size, i * size + size)
+        );
+
+
     const handleBulkOperation = async () => {
         if (!client || selectedCount === 0) return
 
@@ -112,16 +118,10 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         if (bulkOptions.hiddenFromStatusLists !== '') updates.hiddenFromStatusLists = bulkOptions.hiddenFromStatusLists === 'true'
         if (bulkOptions.notes.trim()) updates.notes = bulkOptions.notes
 
-        // Handle custom lists - convert to array format expected by API
-        const selectedCustomLists = Object.entries(bulkOptions.customLists)
-            .filter(([_, isSelected]) => isSelected)
-            .map(([listName, _]) => listName)
+        const customListChanges = bulkOptions.customLists
+        const hasCustomListChanges = Object.keys(customListChanges).length > 0
 
-        if (selectedCustomLists.length > 0) {
-            updates.customLists = selectedCustomLists
-        }
-
-        if (Object.keys(updates).length === 0 && selectedCustomLists.length === 0) {
+        if (Object.keys(updates).length === 0 && !hasCustomListChanges) {
             addNotification({
                 type: 'warning',
                 message: 'Please select at least one field to update'
@@ -135,10 +135,6 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         const totalEntries = selectedMediaLists.length
         setProcessProgress({ current: 0, total: totalEntries, successful: 0, failed: 0 })
 
-        // Separate entries into existing and new
-        const existingEntries = selectedMediaLists.filter(entry => entry.id)
-        const newEntries = selectedMediaLists.filter(entry => !entry.id)
-
         // Initialize rate limiter with current config
         rateLimiterRef.current = new RateLimiter(rateLimiterConfig)
 
@@ -151,57 +147,52 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                 message: `Starting bulk update of ${totalEntries} entries...`
             })
 
-            // Process existing entries in bulk
-            if (existingEntries.length > 0) {
-                const entryIds = existingEntries.map(entry => entry.id)
+            const entriesToUpdate = selectedMediaLists.map(entry => {
+                const entryUpdates = { ...updates };
+                if (hasCustomListChanges) {
+                    const currentCustomLists = Object.keys(entry.customLists || {}).filter(listName => entry.customLists && entry.customLists[listName]);
+                    const listsToRemove = new Set(Object.keys(customListChanges));
+                    const listsToAdd = new Set(Object.entries(customListChanges).filter(([, v]) => v).map(([k]) => k));
+                    let finalCustomLists = currentCustomLists.filter(list => !listsToRemove.has(list));
+                    finalCustomLists = [...finalCustomLists, ...Array.from(listsToAdd)];
+                    entryUpdates.customLists = Array.from(new Set(finalCustomLists));
+                }
+                return { mediaId: entry.mediaId, updates: entryUpdates };
+            });
+
+            const chunks = chunk(entriesToUpdate, 10);
+
+            for (const chunk of chunks) {
+                if (isCancelling) break;
                 try {
                     const results = await rateLimiterRef.current.execute(async () => {
-                        return await client.updateMediaListEntries(entryIds, updates)
-                    })
-                    successfulCount += results.length
-                    failedCount += existingEntries.length - results.length
-
+                        return await client.bulkSaveMediaListEntries(chunk);
+                    });
+                    successfulCount += results.length;
                     results.forEach(result => {
-                        updateMediaListEntry(result)
-                    })
+                        updateMediaListEntry(result);
+                    });
                 } catch (error: any) {
-                    console.error('Bulk update for existing entries failed:', error)
-                    failedCount += existingEntries.length
+                    console.error('Bulk update for chunk failed:', error);
+                    failedCount += chunk.length;
                     addNotification({
                         type: 'error',
-                        message: `Failed to update ${existingEntries.length} existing entries. ${error.message || 'Please try again.'}`
-                    })
+                        message: `Failed to update a batch of entries. ${error.message || 'Please try again.'}`
+                    });
                 }
+                setProcessProgress({
+                    current: successfulCount + failedCount,
+                    total: totalEntries,
+                    successful: successfulCount,
+                    failed: failedCount
+                });
             }
 
-            // Process new entries individually
-            if (newEntries.length > 0) {
-                for (const entry of newEntries) {
-                    if (isCancelling) break
-                    try {
-                        const result = await rateLimiterRef.current.execute(async () => {
-                            return await client.updateMediaListEntry(entry.mediaId, updates)
-                        })
-                        successfulCount++
-                        updateMediaListEntry(result)
-                    } catch (error: any) {
-                        console.error(`Failed to add new entry ${entry.media.title.userPreferred}:`, error)
-                        failedCount++
-                    }
-                    setProcessProgress({ 
-                        current: successfulCount + failedCount, 
-                        total: totalEntries, 
-                        successful: successfulCount, 
-                        failed: failedCount 
-                    })
-                }
-            }
-
-            setProcessProgress({ 
-                current: totalEntries, 
-                total: totalEntries, 
-                successful: successfulCount, 
-                failed: failedCount 
+            setProcessProgress({
+                current: totalEntries,
+                total: totalEntries,
+                successful: successfulCount,
+                failed: failedCount
             })
 
             // Update stats display

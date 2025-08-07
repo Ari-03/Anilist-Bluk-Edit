@@ -144,7 +144,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       currentRequests.clear()
       console.log('AuthContext unmounted - cleared active requests')
     }
-  }, []) // Empty dependency array is correct now
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, accessToken]) 
 
   // Legacy method for backward compatibility
   const signIn = async (token: string): Promise<{ success: boolean; error?: string }> => {

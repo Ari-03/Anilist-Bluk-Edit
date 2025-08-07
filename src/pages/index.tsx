@@ -60,6 +60,7 @@ export default function Home() {
         if (client && authUser) {
             useStore.getState().fetchMediaLists(authUser.id, currentType)
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [client, authUser, currentType])
 
     // Apply dark mode class to document

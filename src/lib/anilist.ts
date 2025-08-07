@@ -497,6 +497,65 @@ export class AniListClient {
     return new Promise(resolve => setTimeout(resolve, ms))
   }
 
+  async bulkSaveMediaListEntries(
+    entries: {
+      mediaId: number,
+      updates: Partial<{
+        status: MediaListStatus
+        score: number
+        progress: number
+        private: boolean
+        notes: string
+        hiddenFromStatusLists: boolean
+        customLists: string[]
+      }>
+    }[]
+  ): Promise<MediaList[]> {
+    const mutationDefs = entries.map((_, i) => `
+      $mediaId${i}: Int,
+      $status${i}: MediaListStatus,
+      $score${i}: Float,
+      $progress${i}: Int,
+      $private${i}: Boolean,
+      $notes${i}: String,
+      $hiddenFromStatusLists${i}: Boolean,
+      $customLists${i}: [String]
+    `).join('\n');
+
+    const mutations = entries.map((_, i) => `
+      entry${i}: SaveMediaListEntry(
+        mediaId: $mediaId${i},
+        status: $status${i},
+        score: $score${i},
+        progress: $progress${i},
+        private: $private${i},
+        notes: $notes${i},
+        hiddenFromStatusLists: $hiddenFromStatusLists${i},
+        customLists: $customLists${i}
+      ) {
+        id mediaId status score progress customLists updatedAt
+      }
+    `).join('\n');
+
+    const fullMutation = `mutation(${mutationDefs}) { ${mutations} }`;
+
+    const variables = entries.reduce((acc, entry, i) => {
+      acc[`mediaId${i}`] = entry.mediaId;
+      acc[`status${i}`] = entry.updates.status;
+      acc[`score${i}`] = entry.updates.score;
+      acc[`progress${i}`] = entry.updates.progress;
+      acc[`private${i}`] = entry.updates.private;
+      acc[`notes${i}`] = entry.updates.notes;
+      acc[`hiddenFromStatusLists${i}`] = entry.updates.hiddenFromStatusLists;
+      acc[`customLists${i}`] = entry.updates.customLists;
+      return acc;
+    }, {} as Record<string, any>);
+
+    const data = await this.request<any>(fullMutation, variables);
+
+    return Object.values(data);
+  }
+
   
 
   async deleteMediaListEntry(id: number): Promise<{ deleted: boolean }> {
