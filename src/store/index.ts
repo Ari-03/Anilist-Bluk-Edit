@@ -270,34 +270,78 @@ export const useStore = create<AppState & AppActions>()(
                         return
                     }
 
-                    console.log('Fetching media lists...', { userId, type, force })
-                    set({ isLoadingLists: true })
+                    console.log('Fetching media lists...', { userId, type, force, hasAccessToken: !!state.accessToken })
+                    set({ isLoadingLists: true, error: null })
+
+                    if (!state.accessToken) {
+                        const errorMessage = 'No access token available for loading media lists'
+                        console.error(errorMessage)
+                        set({ isLoadingLists: false, error: errorMessage })
+                        get().addNotification({
+                            type: 'error',
+                            message: 'Authentication required. Please sign in again.',
+                        })
+                        return
+                    }
 
                     try {
                         const client = new (require('@/lib/anilist').AniListClient)(state.accessToken)
+                        console.log('Fetching anime and manga lists...')
+                        
                         const [animeListsData, mangaListsData] = await Promise.all([
                             client.getAllMediaLists(userId, MediaType.ANIME),
                             client.getAllMediaLists(userId, MediaType.MANGA),
                         ])
+
+                        console.log('Data fetched successfully:', {
+                            animeCount: animeListsData.length,
+                            mangaCount: mangaListsData.length
+                        })
 
                         set({
                             animeLists: animeListsData,
                             mangaLists: mangaListsData,
                             lastDataLoad: Date.now(),
                             isLoadingLists: false,
+                            error: null
                         })
+
+                        // Apply filters after setting data
+                        get().applyFilters()
 
                         get().addNotification({
                             type: 'success',
                             message: `Successfully loaded ${animeListsData.length} anime and ${mangaListsData.length} manga entries.`,
                         })
-                    } catch (error) {
-                        console.error('Failed to fetch media lists:', error)
-                        set({ error: error instanceof Error ? error.message : 'Failed to load lists', isLoadingLists: false })
+                    } catch (error: any) {
+                        console.error('Failed to fetch media lists:', {
+                            error: error.message,
+                            status: error.status,
+                            details: error.details
+                        })
+                        
+                        let errorMessage = 'Failed to load your media lists.'
+                        if (error.status === 401) {
+                            errorMessage = 'Authentication expired. Please sign in again.'
+                        } else if (error.status === 429) {
+                            errorMessage = 'Rate limit exceeded. Please wait a moment and try again.'
+                        } else if (error.status === 500) {
+                            errorMessage = 'AniList server error. Please try again later.'
+                        } else if (!navigator.onLine) {
+                            errorMessage = 'No internet connection. Please check your connection.'
+                        }
+                        
+                        set({ 
+                            error: error instanceof Error ? error.message : 'Failed to load lists', 
+                            isLoadingLists: false 
+                        })
+                        
                         get().addNotification({
                             type: 'error',
-                            message: 'Failed to refresh your media lists. Please try again.',
+                            message: errorMessage,
                         })
+                        
+                        throw error // Re-throw so calling code can handle it
                     }
                 },
 

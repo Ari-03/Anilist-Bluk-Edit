@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:docs.anilist.co)"
+      "WebFetch(domain:docs.anilist.co)",
+      "Bash(npm run type-check:*)"
     ],
     "deny": []
   }

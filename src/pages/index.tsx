@@ -11,7 +11,7 @@ import LeftSidebar from '@/components/LeftSidebar'
 import NotificationList from '@/components/NotificationList'
 import DebugPanel from '@/components/DebugPanel'
 import TokenLogin from '@/components/TokenLogin'
-import { Loader2, LogIn, LogOut, User, Moon, Sun } from 'lucide-react'
+import { Loader2, LogIn, LogOut, User, Moon, Sun, RotateCcw } from 'lucide-react'
 
 export default function Home() {
     const { user: authUser, accessToken, isLoading: authLoading, signOut } = useAuth()
@@ -35,33 +35,86 @@ export default function Home() {
     } = useStore()
 
     const [client, setClient] = useState<AniListClient | null>(null)
+    const [isManualRefreshing, setIsManualRefreshing] = useState(false)
 
-    // Initialize AniList client when access token is available
+    // Manual refresh function
+    const handleManualRefresh = async () => {
+        if (!client || !authUser || isManualRefreshing) return
+        
+        setIsManualRefreshing(true)
+        console.log('Manual refresh triggered by user')
+        
+        try {
+            await useStore.getState().fetchMediaLists(authUser.id, currentType, true)
+            addNotification({
+                type: 'success',
+                message: 'Successfully refreshed your media lists!'
+            })
+        } catch (error) {
+            console.error('Manual refresh failed:', error)
+            addNotification({
+                type: 'error',
+                message: 'Failed to refresh your lists. Please check your connection.'
+            })
+        } finally {
+            setIsManualRefreshing(false)
+        }
+    }
+
+    // Initialize AniList client and sync user data when access token is available
     useEffect(() => {
         console.log('Access token changed:', { 
             hasToken: !!accessToken, 
             tokenLength: accessToken?.length,
-            hasAuthUser: !!authUser 
+            hasAuthUser: !!authUser,
+            storeUser: user?.name
         })
         
         if (accessToken) {
             const anilistClient = new AniListClient(accessToken)
             setClient(anilistClient)
             setAccessToken(accessToken)
+            
+            // Sync user data from auth context to store
+            if (authUser && (!user || user.id !== authUser.id)) {
+                console.log('Syncing user data to store:', authUser.name)
+                setUser(authUser)
+            }
+            
             console.log('AniList client initialized successfully')
         } else {
             setClient(null)
             console.log('No access token - client cleared')
         }
-    }, [accessToken, setAccessToken])
+    }, [accessToken, authUser, user, setAccessToken, setUser])
 
-    // Load user data and media lists
+    // Load media lists when client and user are ready
     useEffect(() => {
-        if (client && authUser) {
-            useStore.getState().fetchMediaLists(authUser.id, currentType)
+        if (client && authUser && user) {
+            console.log('Triggering data load for user:', {
+                userId: authUser.id,
+                userName: authUser.name,
+                currentType,
+                hasAnimeLists: animeLists.length > 0,
+                hasMangaLists: mangaLists.length > 0,
+                shouldReload: shouldReloadData()
+            })
+            
+            // Force load data after successful authentication
+            useStore.getState().fetchMediaLists(authUser.id, currentType, true)
+                .then(() => {
+                    console.log('Data loading completed successfully')
+                })
+                .catch((error) => {
+                    console.error('Data loading failed:', error)
+                    addNotification({
+                        type: 'error',
+                        message: `Failed to load your ${currentType.toLowerCase()} list. Please try refreshing.`
+                    })
+                })
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [client, authUser, currentType])
+    }, [client, authUser, user, currentType])
 
     // Apply dark mode class to document
     useEffect(() => {
@@ -122,6 +175,16 @@ export default function Home() {
 
                             <div className="flex items-center gap-2">
                                 <button
+                                    onClick={handleManualRefresh}
+                                    disabled={isManualRefreshing || isLoadingLists}
+                                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 
+                                    hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Refresh your media lists"
+                                >
+                                    <RotateCcw className={`w-5 h-5 ${(isManualRefreshing || isLoadingLists) ? 'animate-spin' : ''}`} />
+                                </button>
+                                
+                                <button
                                     onClick={toggleDarkMode}
                                     className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 
                             hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -162,7 +225,32 @@ export default function Home() {
                                 </div>
                             ) : (
                                 <div className="space-y-6">
-                                    {/* Debug Panel
+                                    {/* Show debug info when no lists are loaded */}
+                                    {(animeLists.length === 0 && mangaLists.length === 0) && (
+                                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
+                                            <h3 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+                                                No Media Lists Found
+                                            </h3>
+                                            <p className="text-sm text-yellow-600 dark:text-yellow-300 mb-2">
+                                                Your anime and manga lists appear to be empty. This could mean:
+                                            </p>
+                                            <ul className="text-sm text-yellow-600 dark:text-yellow-300 space-y-1 mb-3 ml-4">
+                                                <li>• You haven't added any anime or manga to your AniList yet</li>
+                                                <li>• There's a connection issue preventing data loading</li>
+                                                <li>• Your AniList privacy settings might be blocking access</li>
+                                            </ul>
+                                            <button
+                                                onClick={handleManualRefresh}
+                                                disabled={isManualRefreshing}
+                                                className="btn-primary text-sm flex items-center gap-2"
+                                            >
+                                                <RotateCcw className={`w-4 h-4 ${isManualRefreshing ? 'animate-spin' : ''}`} />
+                                                Try Refreshing
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Debug Panel (uncomment for debugging)
                                     <DebugPanel /> */}
 
                                     {/* Bulk Edit Panel */}
