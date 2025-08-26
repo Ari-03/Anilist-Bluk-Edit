@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:docs.anilist.co)",
       "Bash(npm run type-check:*)",
-      "Bash(npm run lint)"
+      "Bash(npm run lint)",
+      "Bash(magick:*)"
     ],
     "deny": []
   }
