@@ -4,6 +4,7 @@ import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { MediaType, MediaListStatus } from '@/types/anilist'
 import { getStatusColor, getStatusLabel, getScoreDisplay } from '@/lib/anilist'
+import DefaultCover from '@/components/DefaultCover'
 import {
   Star,
   Play,
@@ -251,18 +252,20 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                 <div className="flex flex-col h-full">
                   {/* Cover Image */}
                   <div className="aspect-[3/4] relative bg-gray-200 dark:bg-gray-700">
-                    {entry.media?.coverImage?.large && (
+                    {entry.media?.coverImage?.large ? (
                       <Image
                         src={entry.media.coverImage.large}
                         alt={entry.media.title?.userPreferred || 'Cover'}
                         fill
                         style={{ objectFit: 'cover' }}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                        quality={85}
+                        quality={80}
                         loading="lazy"
                         placeholder="blur"
                         blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSoaUpUkVkHlBCqKJ5wE9sQeXBXx/Z"
                       />
+                    ) : (
+                      <DefaultCover className="w-full h-full" size="large" />
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
 
@@ -409,19 +412,21 @@ export default function MediaListView({ client }: MediaListViewProps) {
                 // List View
                 <div className="flex items-center gap-4">
                   {/* Cover Thumbnail */}
-                  <div className="w-12 h-16 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden flex-shrink-0">
-                    {entry.media?.coverImage?.medium && (
+                  <div className="w-12 h-16 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden flex-shrink-0 relative">
+                    {entry.media?.coverImage?.medium ? (
                       <Image
                         src={entry.media.coverImage.medium}
                         alt={entry.media.title?.userPreferred || 'Cover'}
                         fill
                         style={{ objectFit: 'cover' }}
                         sizes="48px"
-                        quality={75}
+                        quality={65}
                         loading="lazy"
                         placeholder="blur"
                         blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSoaUpUkVkHlBCqKJ5wE9sQeXBXx/Z"
                       />
+                    ) : (
+                      <DefaultCover className="w-full h-full rounded" size="small" />
                     )}
                   </div>
 

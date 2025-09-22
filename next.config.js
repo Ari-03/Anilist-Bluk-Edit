@@ -11,9 +11,9 @@ const nextConfig = {
         ],
         // Optimize for cost reduction - AniList cover images rarely change
         formats: ['image/webp'], // Limit to WebP only to reduce processing
-        deviceSizes: [640, 750, 828, 1080, 1200], // Common breakpoints for our layout
-        imageSizes: [16, 32, 48, 64, 96, 128, 256, 384], // Specific sizes we actually use
-        minimumCacheTTL: 2678400, // 31 days cache for cost optimization
+        deviceSizes: [640, 768, 1024, 1280], // Optimized for our responsive grid breakpoints
+        imageSizes: [48, 96, 128, 192, 256, 320], // Exact sizes: 48px thumbnails, grid sizes
+        minimumCacheTTL: 31536000, // 1 year cache since covers rarely change
         dangerouslyAllowSVG: false,
         contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     },
@@ -25,7 +25,7 @@ const nextConfig = {
                 headers: [
                     {
                         key: 'Cache-Control',
-                        value: 'public, max-age=2678400, stale-while-revalidate=31536000', // 31 days cache, 1 year stale
+                        value: 'public, max-age=31536000, stale-while-revalidate=31536000', // 1 year cache since covers rarely change
                     },
                 ],
             },

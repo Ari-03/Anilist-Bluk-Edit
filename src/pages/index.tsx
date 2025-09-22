@@ -167,6 +167,7 @@ export default function Home() {
                                             width={24}
                                             height={24}
                                             className="rounded-full"
+                                            unoptimized={true}
                                         />
                                         <span>{user.name}</span>
                                     </div>
