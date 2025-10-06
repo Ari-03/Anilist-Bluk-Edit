@@ -3,16 +3,24 @@ const nextConfig = {
     reactStrictMode: true,
     swcMinify: true,
     images: {
+        // Use custom ImageKit.io loader for image optimization
+        loader: 'custom',
+        loaderFile: './src/lib/imageKitLoader.ts',
+        // Remote patterns still needed for Next.js security
         remotePatterns: [
             {
                 protocol: 'https',
                 hostname: 's4.anilist.co',
             },
+            {
+                protocol: 'https',
+                hostname: 'ik.imagekit.io',
+            },
         ],
-        // Optimize for cost reduction - AniList cover images rarely change
-        formats: ['image/webp'], // Limit to WebP only to reduce processing
-        deviceSizes: [640, 768, 1024, 1280], // Optimized for our responsive grid breakpoints
-        imageSizes: [48, 96, 128, 192, 256, 320], // Exact sizes: 48px thumbnails, grid sizes
+        // ImageKit handles these optimizations, but keeping for fallback
+        formats: ['image/webp', 'image/avif'],
+        deviceSizes: [640, 768, 1024, 1280, 1536],
+        imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
         minimumCacheTTL: 31536000, // 1 year cache since covers rarely change
         dangerouslyAllowSVG: false,
         contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
@@ -25,7 +33,7 @@ const nextConfig = {
                 headers: [
                     {
                         key: 'Cache-Control',
-                        value: 'public, max-age=31536000, stale-while-revalidate=31536000', // 1 year cache since covers rarely change
+                        value: 'public, max-age=31536000, stale-while-revalidate=31536000',
                     },
                 ],
             },

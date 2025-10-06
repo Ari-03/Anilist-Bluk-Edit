@@ -24,6 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Styling**: Tailwind CSS
 - **API Client**: GraphQL with graphql-request
 - **Rate Limiting**: Custom implementation for AniList API
+- **Image Optimization**: ImageKit.io CDN for image transformation and delivery
 
 ### Key Directories
 - `src/components/` - React components (BulkEditPanel, MediaListView, FilterPanel, etc.)
@@ -88,6 +89,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Key types: `User`, `MediaList`, `Media`, `MediaType`, `MediaListStatus`
 - Enums for media types, statuses, formats, and scoring systems
 
+### Image Optimization (src/lib/imageKitLoader.ts)
+- **Custom ImageKit.io Loader**: Routes Next.js Image components through ImageKit CDN
+- **Automatic Transformations**: Width, quality, and format optimization
+- **Fallback Support**: Falls back to original URLs if ImageKit is not configured
+- **Performance Benefits**: Global CDN, automatic WebP/AVIF conversion, aggressive caching
+- **Usage**: All `next/image` components automatically use ImageKit when configured
+- **Configuration**: Set `NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT` environment variable
+
 ## Development Guidelines
 
 ### Working with Media Lists
@@ -130,6 +139,9 @@ NEXT_PUBLIC_ANILIST_CLIENT_ID=your_client_id_here
 # AniList API Endpoint (optional, defaults to https://graphql.anilist.co)
 ANILIST_API_URL=https://graphql.anilist.co
 
+# ImageKit.io URL Endpoint (optional but recommended for image optimization)
+NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/your_imagekit_id
+
 # Environment (affects cookie security settings)
 NODE_ENV=development
 ```
@@ -141,6 +153,20 @@ NODE_ENV=development
 4. Users can now use seamless OAuth login in addition to manual token entry
 
 **Authentication Fallback**: Manual token entry is always available, requiring no environment setup.
+
+### ImageKit.io Setup (Optional but Recommended)
+1. Sign up for a free ImageKit.io account at [imagekit.io](https://imagekit.io)
+2. Get your URL endpoint from the ImageKit dashboard (format: `https://ik.imagekit.io/your_id`)
+3. Add `NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT` to your `.env.local` file
+4. All images will now be automatically optimized through ImageKit CDN
+
+**Benefits of ImageKit**:
+- Global CDN for faster image delivery worldwide
+- Automatic format conversion (WebP, AVIF) based on browser support
+- Real-time image transformations and resizing
+- Reduced bandwidth costs and improved load times
+
+**Fallback Behavior**: If ImageKit is not configured, images will be served directly from AniList CDN without additional optimization.
 
 ## Common Patterns
 
