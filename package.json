@@ -13,11 +13,13 @@
     "dependencies": {
         "@apollo/client": "^3.8.7",
         "@hookform/resolvers": "^3.3.2",
+        "@imagekit/next": "^2.1.3",
         "@vercel/analytics": "^1.5.0",
         "clsx": "^2.0.0",
         "cookie": "^1.0.2",
         "graphql": "^16.8.1",
         "graphql-request": "^6.1.0",
+        "imagekitio-next": "^1.0.1",
         "lucide-react": "^0.292.0",
         "next": "14.0.0",
         "react": "^18.2.0",

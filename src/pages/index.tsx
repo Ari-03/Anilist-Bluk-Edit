@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
+import { IKImage } from 'imagekitio-next'
 import { useAuth } from '@/contexts/AuthContext'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
@@ -161,13 +161,14 @@ export default function Home() {
                                 </h1>
                                 {user && (
                                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                        <Image
+                                        <IKImage
                                             src={user.avatar?.medium || '/default-avatar.png'}
                                             alt={user.name}
                                             width={24}
                                             height={24}
+                                            transformation={[{ width: 48, height: 48, quality: 80, format: 'auto' }]}
                                             className="rounded-full"
-                                            unoptimized={true}
+                                            loading="lazy"
                                         />
                                         <span>{user.name}</span>
                                     </div>

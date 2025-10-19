@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
+import { IKImage } from 'imagekitio-next'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { MediaType, MediaListStatus } from '@/types/anilist'
@@ -253,16 +253,15 @@ export default function MediaListView({ client }: MediaListViewProps) {
                   {/* Cover Image */}
                   <div className="aspect-[3/4] relative bg-gray-200 dark:bg-gray-700">
                     {entry.media?.coverImage?.large ? (
-                      <Image
+                      <IKImage
                         src={entry.media.coverImage.large}
                         alt={entry.media.title?.userPreferred || 'Cover'}
                         fill
                         style={{ objectFit: 'cover' }}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                        quality={80}
+                        transformation={[{ quality: 80, format: 'auto' }]}
                         loading="lazy"
-                        placeholder="blur"
-                        blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSoaUpUkVkHlBCqKJ5wE9sQeXBXx/Z"
+                        lqip={{ active: true, quality: 20 }}
                       />
                     ) : (
                       <DefaultCover className="w-full h-full" size="large" />
@@ -414,16 +413,15 @@ export default function MediaListView({ client }: MediaListViewProps) {
                   {/* Cover Thumbnail */}
                   <div className="w-12 h-16 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden flex-shrink-0 relative">
                     {entry.media?.coverImage?.medium ? (
-                      <Image
+                      <IKImage
                         src={entry.media.coverImage.medium}
                         alt={entry.media.title?.userPreferred || 'Cover'}
                         fill
                         style={{ objectFit: 'cover' }}
                         sizes="48px"
-                        quality={65}
+                        transformation={[{ quality: 65, format: 'auto' }]}
                         loading="lazy"
-                        placeholder="blur"
-                        blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSoaUpUkVkHlBCqKJ5wE9sQeXBXx/Z"
+                        lqip={{ active: true, quality: 20 }}
                       />
                     ) : (
                       <DefaultCover className="w-full h-full rounded" size="small" />

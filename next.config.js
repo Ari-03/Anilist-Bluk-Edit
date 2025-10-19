@@ -3,10 +3,7 @@ const nextConfig = {
     reactStrictMode: true,
     swcMinify: true,
     images: {
-        // Use custom ImageKit.io loader for image optimization
-        loader: 'custom',
-        loaderFile: './src/lib/imageKitLoader.ts',
-        // Remote patterns still needed for Next.js security
+        // ImageKit SDK will handle image optimization
         remotePatterns: [
             {
                 protocol: 'https',
@@ -17,7 +14,6 @@ const nextConfig = {
                 hostname: 'ik.imagekit.io',
             },
         ],
-        // ImageKit handles these optimizations, but keeping for fallback
         formats: ['image/webp', 'image/avif'],
         deviceSizes: [640, 768, 1024, 1280, 1536],
         imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],

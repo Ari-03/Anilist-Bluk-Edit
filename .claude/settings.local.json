@@ -4,7 +4,10 @@
       "WebFetch(domain:docs.anilist.co)",
       "Bash(npm run type-check:*)",
       "Bash(npm run lint)",
-      "Bash(magick:*)"
+      "Bash(magick:*)",
+      "WebFetch(domain:imagekit.io)",
+      "Bash(cat:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   }
