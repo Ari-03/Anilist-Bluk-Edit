@@ -583,8 +583,8 @@ export default function LeftSidebar() {
 
             {/* Year Pop-out Panel */}
             {activePopout === 'year' && (
-              <div className="absolute left-full top-0 ml-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-6">
-                <div className="pt-2 pb-6 space-y-4">
+              <div className="absolute left-full top-0 ml-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-2">
+                <div className="space-y-4">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">
                     Year Range
                   </h3>
@@ -658,7 +658,7 @@ export default function LeftSidebar() {
                     >
                       <Slider
                         range
-                        tooltip={{ open: true }}
+                        tooltip={{ placement: "bottom" }}
                         min={yearRange.min}
                         max={yearRange.max}
                         value={[filters.year?.start || yearRange.min, filters.year?.end || yearRange.max]}
@@ -698,8 +698,8 @@ export default function LeftSidebar() {
 
             {/* Score Pop-out Panel */}
             {activePopout === 'score' && (
-              <div className="absolute left-full top-0 ml-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-6">
-                <div className="pt-2 pb-6 space-y-4">
+              <div className="absolute left-full top-0 ml-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-2">
+                <div className="space-y-4">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">
                     Score Range
                   </h3>
@@ -775,7 +775,7 @@ export default function LeftSidebar() {
                     >
                       <Slider
                         range
-                        tooltip={{ open: true }}
+                        tooltip={{ placement: "bottom" }}
                         min={scoreRange.min}
                         max={scoreRange.max}
                         step={scoreRange.step}
