@@ -52,6 +52,7 @@ export default function LeftSidebar() {
   } = useStore()
 
   const [activePopout, setActivePopout] = useState<string | null>(null)
+  const [popoutPosition, setPopoutPosition] = useState<{ top: number; left: number } | null>(null)
   const [genreSearch, setGenreSearch] = useState<string>('')
 
   // Count hidden entries
@@ -114,8 +115,21 @@ export default function LeftSidebar() {
     'Shoujo', 'Shounen', 'Space', 'Super Power', 'Vampire', 'Yaoi', 'Yuri'
   ]
 
-  const togglePopout = (section: string) => {
-    setActivePopout(activePopout === section ? null : section)
+  const togglePopout = (section: string, event?: React.MouseEvent<HTMLButtonElement>) => {
+    if (activePopout === section) {
+      setActivePopout(null)
+      setPopoutPosition(null)
+    } else {
+      setActivePopout(section)
+      if (event) {
+        const button = event.currentTarget
+        const rect = button.getBoundingClientRect()
+        setPopoutPosition({
+          top: rect.top,
+          left: rect.right + 8 // 8px gap (ml-2 = 0.5rem = 8px)
+        })
+      }
+    }
   }
 
   const handleSearchChange = (value: string) => {
@@ -231,8 +245,8 @@ export default function LeftSidebar() {
   )
 
   return (
-    <div className="w-80 md:w-80 sm:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-full overflow-visible flex-shrink-0 hidden md:block relative overflow-y-scroll">
-      <div className="p-4 space-y-4 overflow-y-auto">
+    <div className="w-80 md:w-80 sm:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 hidden md:block sticky top-0 max-h-screen flex flex-col">
+      <div className="p-4 space-y-4 overflow-y-auto flex-1">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -334,8 +348,8 @@ export default function LeftSidebar() {
           {/* Status Filter */}
           <div className="relative">
             <button
-              onClick={() => togglePopout('status')}
-              className="w-full flex items-center justify-between py-2.5 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
+              onClick={(e) => togglePopout('status', e)}
+              className="w-full flex items-center justify-between py-2.5 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors z-5"
             >
               <span className="flex items-center gap-2">
                 <Tag className="h-4 w-4" />
@@ -350,8 +364,11 @@ export default function LeftSidebar() {
             </button>
 
             {/* Status Pop-out Panel */}
-            {activePopout === 'status' && (
-              <div className="absolute left-full top-0 ml-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
+            {activePopout === 'status' && popoutPosition && (
+              <div
+                className="fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-4"
+                style={{ top: popoutPosition.top, left: popoutPosition.left }}
+              >
                 <div className="space-y-2">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">Status</h3>
                   <div className="max-h-60 overflow-y-auto space-y-1">
@@ -414,7 +431,7 @@ export default function LeftSidebar() {
           {/* Genre Filter */}
           <div className="relative">
             <button
-              onClick={() => togglePopout('genre')}
+              onClick={(e) => togglePopout('genre', e)}
               className="w-full flex items-center justify-between py-2.5 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -430,8 +447,11 @@ export default function LeftSidebar() {
             </button>
 
             {/* Genre Pop-out Panel */}
-            {activePopout === 'genre' && (
-              <div className="absolute left-full top-0 ml-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
+            {activePopout === 'genre' && popoutPosition && (
+              <div
+                className="fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-4"
+                style={{ top: popoutPosition.top, left: popoutPosition.left }}
+              >
                 <div className="space-y-3">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">Genres</h3>
 
@@ -489,7 +509,7 @@ export default function LeftSidebar() {
           {/* Format Filter */}
           <div className="relative">
             <button
-              onClick={() => togglePopout('format')}
+              onClick={(e) => togglePopout('format', e)}
               className="w-full flex items-center justify-between py-2.5 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -505,8 +525,11 @@ export default function LeftSidebar() {
             </button>
 
             {/* Format Pop-out Panel */}
-            {activePopout === 'format' && (
-              <div className="absolute left-full top-0 ml-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
+            {activePopout === 'format' && popoutPosition && (
+              <div
+                className="fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-4"
+                style={{ top: popoutPosition.top, left: popoutPosition.left }}
+              >
                 <div className="space-y-2">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">Format</h3>
                   <div className="space-y-1">
@@ -530,7 +553,7 @@ export default function LeftSidebar() {
           {/* Country Filter */}
           <div className="relative">
             <button
-              onClick={() => togglePopout('country')}
+              onClick={(e) => togglePopout('country', e)}
               className="w-full flex items-center justify-between py-2.5 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -546,8 +569,11 @@ export default function LeftSidebar() {
             </button>
 
             {/* Country Pop-out Panel */}
-            {activePopout === 'country' && (
-              <div className="absolute left-full top-0 ml-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
+            {activePopout === 'country' && popoutPosition && (
+              <div
+                className="fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-4"
+                style={{ top: popoutPosition.top, left: popoutPosition.left }}
+              >
                 <div className="space-y-2">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">Country</h3>
                   <div className="space-y-1">
@@ -571,7 +597,7 @@ export default function LeftSidebar() {
           {/* Year Filter with Dual-Range Slider */}
           <div className="relative">
             <button
-              onClick={() => togglePopout('year')}
+              onClick={(e) => togglePopout('year', e)}
               className="w-full flex items-center justify-between py-2.5 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -587,8 +613,11 @@ export default function LeftSidebar() {
             </button>
 
             {/* Year Pop-out Panel */}
-            {activePopout === 'year' && (
-              <div className="absolute left-full top-0 ml-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-2">
+            {activePopout === 'year' && popoutPosition && (
+              <div
+                className="fixed w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-2"
+                style={{ top: popoutPosition.top, left: popoutPosition.left }}
+              >
                 <div className="space-y-4">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">
                     Year Range
@@ -686,7 +715,7 @@ export default function LeftSidebar() {
           {/* Score Filter with Dual-Range Slider */}
           <div className="relative">
             <button
-              onClick={() => togglePopout('score')}
+              onClick={(e) => togglePopout('score', e)}
               className="w-full flex items-center justify-between py-2.5 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -702,8 +731,11 @@ export default function LeftSidebar() {
             </button>
 
             {/* Score Pop-out Panel */}
-            {activePopout === 'score' && (
-              <div className="absolute left-full top-0 ml-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-2">
+            {activePopout === 'score' && popoutPosition && (
+              <div
+                className="fixed w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-2"
+                style={{ top: popoutPosition.top, left: popoutPosition.left }}
+              >
                 <div className="space-y-4">
                   <h3 className="font-medium text-gray-900 dark:text-white text-lg">
                     Score Range
@@ -839,7 +871,7 @@ export default function LeftSidebar() {
       {/* Backdrop to close popouts */}
       {activePopout && (
         <div
-          className="fixed inset-0 bg-transparent z-40"
+          className="fixed inset-0 bg-transparent z-[9998]"
           onClick={() => setActivePopout(null)}
         />
       )}

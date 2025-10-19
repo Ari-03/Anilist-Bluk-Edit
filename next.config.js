@@ -2,6 +2,16 @@
 const nextConfig = {
     reactStrictMode: true,
     swcMinify: true,
+    transpilePackages: [
+        'antd',
+        '@ant-design/icons',
+        '@ant-design/icons-svg',
+        'rc-util',
+        'rc-pagination',
+        'rc-picker',
+        'rc-table',
+        'rc-tree'
+    ],
     images: {
         // ImageKit SDK will handle image optimization
         remotePatterns: [

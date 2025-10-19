@@ -214,12 +214,14 @@ export default function Home() {
         </header>
 
         {/* Main Content with Sidebar Layout */}
-        <div className="flex h-[calc(100vh-4rem)]">
+        <div className="flex relative z-0">
           {/* Left Sidebar */}
-          <LeftSidebar />
+          <div className="relative z-10">
+            <LeftSidebar />
+          </div>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-auto relative z-0">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
               {isLoadingLists ? (
                 <div className="text-center py-12">
