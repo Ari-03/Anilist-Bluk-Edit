@@ -245,7 +245,7 @@ export default function LeftSidebar() {
   )
 
   return (
-    <div className="w-80 md:w-80 sm:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 hidden md:block sticky top-0 max-h-screen flex flex-col">
+    <div className="w-80 md:w-80 sm:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 hidden md:block sticky top-16 min-h-screen flex flex-col">
       <div className="p-4 space-y-4 overflow-y-auto flex-1">
         {/* Header */}
         <div className="flex items-center justify-between">
