@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '@/store'
 import { MediaType, MediaListStatus, MediaFormat } from '@/types/anilist'
+import { Slider, InputNumber, Row, Col, ConfigProvider } from 'antd'
 import {
   Search,
   X,
@@ -14,7 +15,9 @@ import {
   Grid3X3,
   List,
   ArrowUpDown,
-  ChevronRight
+  ChevronRight,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 
 const ANIME_FORMATS = [
@@ -33,7 +36,7 @@ const MANGA_FORMATS = [
   { value: MediaFormat.ONE_SHOT, label: 'One Shot' }
 ]
 
-  export default function LeftSidebar() {
+export default function LeftSidebar() {
   const {
     currentType,
     setCurrentType,
@@ -42,11 +45,42 @@ const MANGA_FORMATS = [
     filters,
     setFilters,
     clearFilters,
-    user
+    user,
+    getCurrentLists,
+    showHiddenFromStatusLists,
+    setShowHiddenFromStatusLists
   } = useStore()
 
   const [activePopout, setActivePopout] = useState<string | null>(null)
   const [genreSearch, setGenreSearch] = useState<string>('')
+
+  // Count hidden entries
+  const hiddenEntriesCount = getCurrentLists().filter(entry => entry.hiddenFromStatusLists).length
+
+  // Get dynamic year range from actual user data
+  const getYearRange = () => {
+    const lists = getCurrentLists()
+    const currentYear = new Date().getFullYear()
+
+    if (lists.length === 0) {
+      return { min: 1975, max: currentYear + 1 }
+    }
+
+    const years = lists
+      .map(entry => entry.media?.startDate?.year || entry.media?.seasonYear)
+      .filter((year): year is number => year !== undefined && year !== null)
+
+    if (years.length === 0) {
+      return { min: 1975, max: currentYear + 1 }
+    }
+
+    return {
+      min: Math.min(...years),
+      max: Math.max(...years, currentYear + 1)
+    }
+  }
+
+  const yearRange = getYearRange()
 
   const getStatusOptions = () => {
     const baseOptions = [
@@ -235,6 +269,24 @@ const MANGA_FORMATS = [
           )}
         </div>
 
+        {/* Show Hidden Entries Toggle - Only show if there are hidden entries */}
+        {hiddenEntriesCount > 0 && (
+          <button
+            onClick={() => setShowHiddenFromStatusLists(!showHiddenFromStatusLists)}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${showHiddenFromStatusLists
+                ? 'bg-blue-500 text-white hover:bg-blue-600'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+          >
+            {showHiddenFromStatusLists ? (
+              <Eye className="w-4 h-4" />
+            ) : (
+              <EyeOff className="w-4 h-4" />
+            )}
+            {showHiddenFromStatusLists ? 'Hide' : 'Show'} Hidden Entries ({hiddenEntriesCount})
+          </button>
+        )}
+
         {/* Media Type Toggle */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -244,8 +296,8 @@ const MANGA_FORMATS = [
             <button
               onClick={() => setCurrentType(MediaType.ANIME)}
               className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${currentType === MediaType.ANIME
-                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`}
             >
               <Tv className="h-4 w-4" />
@@ -254,8 +306,8 @@ const MANGA_FORMATS = [
             <button
               onClick={() => setCurrentType(MediaType.MANGA)}
               className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${currentType === MediaType.MANGA
-                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`}
             >
               <BookOpen className="h-4 w-4" />
@@ -399,7 +451,7 @@ const MANGA_FORMATS = [
                   </div>
 
                   {/* Genre Checkboxes */}
-                                    <div className="max-h-48 overflow-y-auto space-y-2">
+                  <div className="max-h-48 overflow-y-auto space-y-2">
                     {COMMON_GENRES
                       .filter(genre =>
                         genre.toLowerCase().includes(genreSearch.toLowerCase())
@@ -532,65 +584,95 @@ const MANGA_FORMATS = [
             {/* Year Pop-out Panel */}
             {activePopout === 'year' && (
               <div className="absolute left-full top-0 ml-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-6">
-                <div className="pt-2 pb-6">
-                  <h3 className="font-medium text-gray-900 dark:text-white text-lg">Year Range</h3>
-                  <div className="space-y-4">
-                    <div className="slider-container">
-                      <div className="flex justify-between text-base text-gray-600 dark:text-gray-400 mb-2">
-                        <span>From: {filters.year?.start || 1950}</span>
-                        <span>To: {filters.year?.end || currentYear}</span>
-                      </div>
-                      <div className="relative h-12">
-                        {/* Track background */}
-                        <div className="absolute top-1/2 left-0 right-0 h-2 bg-gray-200 dark:bg-gray-600 rounded-full transform -translate-y-1/2"></div>
-                        {/* Active track */}
-                        <div
-                          className="absolute top-1/2 h-2 bg-blue-500 rounded-full transform -translate-y-1/2"
-                          style={{
-                            left: `${((filters.year?.start || 1950) - 1950) / (currentYear - 1950) * 100}%`,
-                            width: `${((filters.year?.end || currentYear) - (filters.year?.start || 1950)) / (currentYear - 1950) * 100}%`
-                          }}
-                        ></div>
-                        {/* Min range slider */}
-                        <input
-                          type="range"
-                          min="1950"
-                          max={currentYear}
-                          value={filters.year?.start || 1950}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value)
-                            const maxValue = filters.year?.end || currentYear
+                <div className="pt-2 pb-6 space-y-4">
+                  <h3 className="font-medium text-gray-900 dark:text-white text-lg">
+                    Year Range
+                  </h3>
+
+                  {/* Input Numbers Row */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">From:</label>
+                      <InputNumber
+                        min={yearRange.min}
+                        max={filters.year?.end || yearRange.max}
+                        value={filters.year?.start || yearRange.min}
+                        onChange={(value) => {
+                          if (value !== null) {
                             setFilters({
                               ...filters,
                               year: {
-                                ...filters.year,
-                                start: Math.min(value, maxValue)
+                                start: value,
+                                end: filters.year?.end || yearRange.max
                               }
                             })
-                          }}
-                          className="slider"
-                        />
-                        {/* Max range slider */}
-                        <input
-                          type="range"
-                          min="1950"
-                          max={currentYear}
-                          value={filters.year?.end || currentYear}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value)
-                            const minValue = filters.year?.start || 1950
-                            setFilters({
-                              ...filters,
-                              year: {
-                                ...filters.year,
-                                end: Math.max(value, minValue)
-                              }
-                            })
-                          }}
-                          className="slider"
-                        />
-                      </div>
+                          }
+                        }}
+                        size="small"
+                        className="w-full"
+                      />
                     </div>
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">To:</label>
+                      <InputNumber
+                        min={filters.year?.start || yearRange.min}
+                        max={yearRange.max}
+                        value={filters.year?.end || yearRange.max}
+                        onChange={(value) => {
+                          if (value !== null) {
+                            setFilters({
+                              ...filters,
+                              year: {
+                                start: filters.year?.start || yearRange.min,
+                                end: value
+                              }
+                            })
+                          }
+                        }}
+                        size="small"
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Slider Below */}
+                  <div className="px-2">
+                    <ConfigProvider
+                      theme={{
+                        components: {
+                          Slider: {
+                            railSize: 8,
+                            railBg: 'rgb(229, 231, 235)',
+                            railHoverBg: 'rgb(209, 213, 219)',
+                            trackBg: 'rgb(59, 130, 246)',
+                            trackHoverBg: 'rgb(37, 99, 235)',
+                            handleSize: 16,
+                            handleSizeHover: 18,
+                            handleColor: 'rgb(59, 130, 246)',
+                            handleActiveColor: 'rgb(29, 78, 216)',
+                            handleLineWidth: 2,
+                            handleLineWidthHover: 3
+                          }
+                        }
+                      }}
+                    >
+                      <Slider
+                        range
+                        draggableTrack
+                        tooltip={{ open: true }}
+                        min={yearRange.min}
+                        max={yearRange.max}
+                        value={[filters.year?.start || yearRange.min, filters.year?.end || yearRange.max]}
+                        onChange={(value) => {
+                          if (Array.isArray(value)) {
+                            setFilters({
+                              ...filters,
+                              year: { start: value[0], end: value[1] }
+                            })
+                          }
+                        }}
+                      />
+                    </ConfigProvider>
                   </div>
                 </div>
               </div>
@@ -618,67 +700,98 @@ const MANGA_FORMATS = [
             {/* Score Pop-out Panel */}
             {activePopout === 'score' && (
               <div className="absolute left-full top-0 ml-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-6">
-                <div className="pt-2 pb-6">
-                  <h3 className="font-medium text-gray-900 dark:text-white text-lg">Score Range</h3>
-                  <div className="space-y-4">
-                    <div className="slider-container">
-                      <div className="flex justify-between text-base text-gray-600 dark:text-gray-400 mb-2">
-                        <span>Min: {filters.score?.min || scoreRange.min}</span>
-                        <span>Max: {filters.score?.max || scoreRange.max}</span>
-                      </div>
-                      <div className="relative h-12">
-                        {/* Track background */}
-                        <div className="absolute top-1/2 left-0 right-0 h-2 bg-gray-200 dark:bg-gray-600 rounded-full transform -translate-y-1/2"></div>
-                        {/* Active track */}
-                        <div
-                          className="absolute top-1/2 h-2 bg-blue-500 rounded-full transform -translate-y-1/2"
-                          style={{
-                            left: `${((filters.score?.min || scoreRange.min) - scoreRange.min) / (scoreRange.max - scoreRange.min) * 100}%`,
-                            width: `${((filters.score?.max || scoreRange.max) - (filters.score?.min || scoreRange.min)) / (scoreRange.max - scoreRange.min) * 100}%`
-                          }}
-                        ></div>
-                        {/* Min range slider */}
-                        <input
-                          type="range"
-                          min={scoreRange.min}
-                          max={scoreRange.max}
-                          step={scoreRange.step}
-                          value={filters.score?.min || scoreRange.min}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value)
-                            const maxValue = filters.score?.max || scoreRange.max
+                <div className="pt-2 pb-6 space-y-4">
+                  <h3 className="font-medium text-gray-900 dark:text-white text-lg">
+                    Score Range
+                  </h3>
+
+                  {/* Input Numbers Row */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Min:</label>
+                      <InputNumber
+                        min={scoreRange.min}
+                        max={filters.score?.max || scoreRange.max}
+                        step={scoreRange.step}
+                        value={filters.score?.min || scoreRange.min}
+                        onChange={(value) => {
+                          if (value !== null) {
                             setFilters({
                               ...filters,
                               score: {
-                                ...filters.score,
-                                min: Math.min(value, maxValue)
+                                min: value,
+                                max: filters.score?.max || scoreRange.max
                               }
                             })
-                          }}
-                          className="slider"
-                        />
-                        {/* Max range slider */}
-                        <input
-                          type="range"
-                          min={scoreRange.min}
-                          max={scoreRange.max}
-                          step={scoreRange.step}
-                          value={filters.score?.max || scoreRange.max}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value)
-                            const minValue = filters.score?.min || scoreRange.min
-                            setFilters({
-                              ...filters,
-                              score: {
-                                ...filters.score,
-                                max: Math.max(value, minValue)
-                              }
-                            })
-                          }}
-                          className="slider"
-                        />
-                      </div>
+                          }
+                        }}
+                        size="small"
+                        className="w-full"
+                      />
                     </div>
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Max:</label>
+                      <InputNumber
+                        min={filters.score?.min || scoreRange.min}
+                        max={scoreRange.max}
+                        step={scoreRange.step}
+                        value={filters.score?.max || scoreRange.max}
+                        onChange={(value) => {
+                          if (value !== null) {
+                            setFilters({
+                              ...filters,
+                              score: {
+                                min: filters.score?.min || scoreRange.min,
+                                max: value
+                              }
+                            })
+                          }
+                        }}
+                        size="small"
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Slider Below */}
+                  <div className="px-2">
+                    <ConfigProvider
+                      theme={{
+                        components: {
+                          Slider: {
+                            railSize: 8,
+                            railBg: 'rgb(229, 231, 235)',
+                            railHoverBg: 'rgb(209, 213, 219)',
+                            trackBg: 'rgb(59, 130, 246)',
+                            trackHoverBg: 'rgb(37, 99, 235)',
+                            handleSize: 16,
+                            handleSizeHover: 18,
+                            handleColor: 'rgb(59, 130, 246)',
+                            handleActiveColor: 'rgb(29, 78, 216)',
+                            handleLineWidth: 2,
+                            handleLineWidthHover: 3
+                          }
+                        }
+                      }}
+                    >
+                      <Slider
+                        range
+                        draggableTrack
+                        tooltip={{ open: true }}
+                        min={scoreRange.min}
+                        max={scoreRange.max}
+                        step={scoreRange.step}
+                        value={[filters.score?.min || scoreRange.min, filters.score?.max || scoreRange.max]}
+                        onChange={(value) => {
+                          if (Array.isArray(value)) {
+                            setFilters({
+                              ...filters,
+                              score: { min: value[0], max: value[1] }
+                            })
+                          }
+                        }}
+                      />
+                    </ConfigProvider>
                   </div>
                 </div>
               </div>
@@ -698,8 +811,8 @@ const MANGA_FORMATS = [
               <button
                 onClick={() => setViewMode('grid')}
                 className={`flex-1 flex items-center justify-center gap-2 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'grid'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
               >
                 <Grid3X3 className="h-3.5 w-3.5" />
@@ -708,8 +821,8 @@ const MANGA_FORMATS = [
               <button
                 onClick={() => setViewMode('list')}
                 className={`flex-1 flex items-center justify-center gap-2 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'list'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
               >
                 <List className="h-3.5 w-3.5" />

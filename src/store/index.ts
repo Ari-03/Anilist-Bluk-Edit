@@ -60,6 +60,7 @@ interface AppState {
     // Filters and search
     filters: FilterOptions
     filteredEntries: MediaList[]
+    showHiddenFromStatusLists: boolean
 
     // UI state
     isLoading: boolean
@@ -107,6 +108,7 @@ interface AppActions {
     setFilters: (filters: Partial<FilterOptions>) => void
     clearFilters: () => void
     applyFilters: () => void
+    setShowHiddenFromStatusLists: (show: boolean) => void
 
     // UI actions
     setLoading: (loading: boolean) => void
@@ -139,6 +141,7 @@ const initialState: AppState = {
         sortOrder: 'asc'
     },
     filteredEntries: [],
+    showHiddenFromStatusLists: false,
     isLoading: false,
     error: null,
     notifications: [],
@@ -402,9 +405,13 @@ export const useStore = create<AppState & AppActions>()(
                     set({ filters: initialState.filters })
                     get().applyFilters()
                 },
+                setShowHiddenFromStatusLists: (showHiddenFromStatusLists) => {
+                    set({ showHiddenFromStatusLists })
+                    get().applyFilters()
+                },
                 applyFilters: () => {
                     const state = get()
-                    const { filters, currentType, currentStatus } = state
+                    const { filters, currentType, currentStatus, showHiddenFromStatusLists } = state
                     let lists = state.getCurrentLists()
 
                     console.log('=== applyFilters START ===')
@@ -413,6 +420,7 @@ export const useStore = create<AppState & AppActions>()(
                         currentStatus,
                         totalLists: lists.length,
                         filters,
+                        showHiddenFromStatusLists,
                         sortBy: filters.sortBy || 'title',
                         sortOrder: filters.sortOrder || 'asc',
                         listsPreview: lists.slice(0, 2).map(e => ({
@@ -427,6 +435,13 @@ export const useStore = create<AppState & AppActions>()(
                         const beforeLength = lists.length
                         lists = lists.filter(entry => entry.status === currentStatus)
                         console.log(`After status filter (${currentStatus}): ${beforeLength} -> ${lists.length} entries`)
+                    }
+
+                    // Filter hidden entries unless showHiddenFromStatusLists is true
+                    if (!showHiddenFromStatusLists) {
+                        const beforeLength = lists.length
+                        lists = lists.filter(entry => !entry.hiddenFromStatusLists)
+                        console.log(`After hidden filter: ${beforeLength} -> ${lists.length} entries (hidden entries filtered out)`)
                     }
 
                     // Apply additional status filters from FilterPanel (only if currentStatus is 'ALL')

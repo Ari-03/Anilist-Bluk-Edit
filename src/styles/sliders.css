@@ -50,3 +50,38 @@
 .slider:focus::-moz-range-thumb {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
 }
+
+/* Ant Design InputNumber Dark Mode Styling */
+.dark .ant-input-number {
+    background-color: rgb(31 41 55);
+    border-color: rgb(75 85 99);
+    color: rgb(243 244 246);
+}
+
+.dark .ant-input-number:hover {
+    border-color: rgb(107 114 128);
+}
+
+.dark .ant-input-number:focus,
+.dark .ant-input-number-focused {
+    border-color: rgb(59 130 246);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.dark .ant-input-number-input {
+    color: rgb(243 244 246);
+}
+
+.dark .ant-input-number-handler {
+    border-color: rgb(75 85 99);
+    color: rgb(156 163 175);
+}
+
+.dark .ant-input-number-handler:hover {
+    color: rgb(59 130 246);
+}
+
+.dark .ant-input-number-handler-up-inner,
+.dark .ant-input-number-handler-down-inner {
+    color: inherit;
+}
