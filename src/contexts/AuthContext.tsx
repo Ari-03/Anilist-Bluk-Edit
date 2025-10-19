@@ -134,13 +134,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     initializeAuth()
 
+    // Capture ref value before cleanup function to avoid stale ref warning
+    const currentRequests = activeRequests.current
+
     // Cleanup function for React Strict Mode
     return () => {
       isMounted = false
       // Reset initialization flag on unmount - will be set again if component remounts
       initializationComplete.current = false
       // Clear any pending active requests on component unmount
-      const currentRequests = activeRequests.current
       currentRequests.clear()
       console.log('AuthContext unmounted - cleared active requests')
     }

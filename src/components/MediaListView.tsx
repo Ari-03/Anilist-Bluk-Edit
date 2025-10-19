@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, startTransition } from 'react'
 import { IKImage } from 'imagekitio-next'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
@@ -48,6 +48,12 @@ export default function MediaListView({ client }: MediaListViewProps) {
     progress?: number
     notes?: string
   }>({})
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [exitingEntries, setExitingEntries] = useState<Set<number>>(new Set())
+  const [newEntries, setNewEntries] = useState<Set<number>>(new Set())
+  const [displayedEntries, setDisplayedEntries] = useState<typeof filteredEntries>([])
+  const [prevFilteredEntries, setPrevFilteredEntries] = useState<typeof filteredEntries>([])
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   // Get score range based on user's score format
   const getScoreRange = () => {
@@ -70,10 +76,15 @@ export default function MediaListView({ client }: MediaListViewProps) {
 
   const scoreRange = getScoreRange()
 
-  // Ensure filters are applied when dependencies change
+  // Ensure filters are applied when dependencies change with smooth transitions
   useEffect(() => {
     if (animeLists.length > 0 || mangaLists.length > 0) {
-      applyFilters()
+      setIsTransitioning(true)
+      startTransition(() => {
+        applyFilters()
+        // Give a brief moment for the transition effect
+        setTimeout(() => setIsTransitioning(false), 150)
+      })
     }
   }, [currentType, currentStatus, animeLists.length, mangaLists.length, filters.sortBy, filters.sortOrder, applyFilters])
 
@@ -83,6 +94,64 @@ export default function MediaListView({ client }: MediaListViewProps) {
       console.log(`Found ${filteredEntries.length} entries. User score format: ${user?.mediaListOptions?.scoreFormat}`);
     }
   }, [filteredEntries.length, user?.mediaListOptions?.scoreFormat])
+
+  // Track entry changes and animate exits
+  useEffect(() => {
+    // Skip animations on initial load
+    if (isInitialLoad && filteredEntries.length > 0) {
+      setDisplayedEntries(filteredEntries)
+      setPrevFilteredEntries(filteredEntries)
+      setIsInitialLoad(false)
+      return
+    }
+
+    const currentIds = new Set(filteredEntries.map(e => e.id))
+    const previousIds = new Set(prevFilteredEntries.map(e => e.id))
+
+    // Find entries being removed
+    const removedIds = new Set(
+      Array.from(previousIds).filter(id => !currentIds.has(id))
+    )
+
+    // Find entries being added
+    const addedIds = new Set(
+      Array.from(currentIds).filter(id => !previousIds.has(id))
+    )
+
+    if (removedIds.size > 0) {
+      // Mark removed entries as exiting
+      setExitingEntries(removedIds)
+      // Mark added entries as new (for fade-in animation)
+      setNewEntries(addedIds)
+
+      // Combine current entries with exiting entries for display
+      const exitingEntriesData = prevFilteredEntries.filter(e => removedIds.has(e.id))
+      setDisplayedEntries([...filteredEntries, ...exitingEntriesData])
+
+      // Remove exiting entries after animation completes (reduced to 150ms)
+      setTimeout(() => {
+        setExitingEntries(new Set())
+        setNewEntries(new Set())
+        setDisplayedEntries(filteredEntries)
+        setPrevFilteredEntries(filteredEntries)
+      }, 150)
+    } else if (addedIds.size > 0) {
+      // Only additions, no removals
+      setNewEntries(addedIds)
+      setDisplayedEntries(filteredEntries)
+
+      // Clear new entries after animation
+      setTimeout(() => {
+        setNewEntries(new Set())
+        setPrevFilteredEntries(filteredEntries)
+      }, 200)
+    } else {
+      // No changes in entries, just update normally
+      setDisplayedEntries(filteredEntries)
+      setPrevFilteredEntries(filteredEntries)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredEntries])
 
   console.log('MediaListView render:', {
     currentType,
@@ -199,11 +268,10 @@ export default function MediaListView({ client }: MediaListViewProps) {
   }
 
   return (
-    <div className="space-y-6" key={`${currentType}-${currentStatus}-${filteredEntries.length}`}>
-
+    <div className="space-y-6">
       {/* Entries Grid/List */}
-      {filteredEntries.length === 0 ? (
-        <div className="text-center py-12">
+      {filteredEntries.length === 0 && exitingEntries.size === 0 ? (
+        <div className={`text-center py-12 transition-opacity duration-300 ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
           <div className="text-gray-400 dark:text-gray-500 mb-2">
             {currentType === MediaType.ANIME ? <Play className="w-12 h-12 mx-auto" /> : <Book className="w-12 h-12 mx-auto" />}
           </div>
@@ -212,15 +280,35 @@ export default function MediaListView({ client }: MediaListViewProps) {
           </p>
         </div>
       ) : (
-        <div className={viewMode === 'grid'
+        <div className={`${viewMode === 'grid'
           ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
           : 'space-y-2'
-        }>
-          {filteredEntries.map((entry) => (
+        } transition-opacity duration-200 ${isTransitioning ? 'opacity-70' : 'opacity-100'}`}>
+          {displayedEntries.map((entry, index) => {
+            const isExiting = exitingEntries.has(entry.id)
+            const isNew = newEntries.has(entry.id)
+
+            // Determine animation class: only animate NEW or EXITING entries
+            let animationClass = ''
+            let animationDelay = '0ms'
+
+            if (isExiting) {
+              animationClass = 'animate-fadeOut'
+              animationDelay = '0ms'
+            } else if (isNew) {
+              animationClass = 'animate-fadeIn'
+              // Limit stagger to first 20 items with shorter delays
+              animationDelay = `${Math.min(index * 15, 300)}ms`
+            }
+            // No animation for entries that were already visible
+
+            return (
             <div
               key={entry.id}
               className={`card media-card ${viewMode === 'list' ? 'p-4' : 'overflow-hidden'} ${selectedEntries.has(entry.id) ? 'ring-4 ring-blue-500 bg-blue-100 dark:bg-blue-800/40 shadow-lg transform scale-[1.02] border-blue-500' : ''
-                } ${bulkEditMode ? 'group cursor-pointer hover:shadow-md hover:ring-2 hover:ring-blue-300 hover:transform hover:scale-[1.01] transition-all duration-200' : ''}`}
+                } ${bulkEditMode ? 'group cursor-pointer hover:shadow-md hover:ring-2 hover:ring-blue-300 hover:transform hover:scale-[1.01] transition-all duration-200' : ''
+                } ${animationClass}`}
+              style={{ animationDelay }}
               onClick={bulkEditMode ? (e) => {
                 // Prevent selection when clicking on interactive elements
                 const target = e.target as HTMLElement;
@@ -573,7 +661,8 @@ export default function MediaListView({ client }: MediaListViewProps) {
                 </div>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

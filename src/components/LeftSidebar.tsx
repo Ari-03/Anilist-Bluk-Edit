@@ -85,8 +85,8 @@ export default function LeftSidebar() {
   const getStatusOptions = () => {
     const baseOptions = [
       { value: MediaListStatus.CURRENT, label: 'Current' },
-      { value: MediaListStatus.COMPLETED, label: 'Completed' },
       { value: MediaListStatus.PLANNING, label: 'Planning' },
+      { value: MediaListStatus.COMPLETED, label: 'Completed' },
       { value: MediaListStatus.DROPPED, label: 'Dropped' },
       { value: MediaListStatus.PAUSED, label: 'Paused' },
       { value: MediaListStatus.REPEATING, label: 'Repeating' }
@@ -231,8 +231,8 @@ export default function LeftSidebar() {
   )
 
   return (
-    <div className="w-80 md:w-80 sm:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-full overflow-visible flex-shrink-0 hidden md:block relative">
-      <div className="p-4 space-y-4">
+    <div className="w-80 md:w-80 sm:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-full overflow-visible flex-shrink-0 hidden md:block relative overflow-y-scroll">
+      <div className="p-4 space-y-4 overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -268,24 +268,6 @@ export default function LeftSidebar() {
             </button>
           )}
         </div>
-
-        {/* Show Hidden Entries Toggle - Only show if there are hidden entries */}
-        {hiddenEntriesCount > 0 && (
-          <button
-            onClick={() => setShowHiddenFromStatusLists(!showHiddenFromStatusLists)}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${showHiddenFromStatusLists
-              ? 'bg-blue-500 text-white hover:bg-blue-600'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
-          >
-            {showHiddenFromStatusLists ? (
-              <Eye className="w-4 h-4" />
-            ) : (
-              <EyeOff className="w-4 h-4" />
-            )}
-            {showHiddenFromStatusLists ? 'Hide' : 'Show'} Hidden Entries ({hiddenEntriesCount})
-          </button>
-        )}
 
         {/* Media Type Toggle */}
         <div className="space-y-2">
@@ -398,6 +380,29 @@ export default function LeftSidebar() {
                             <span className="text-base text-gray-700 dark:text-gray-300">{list}</span>
                           </label>
                         ))}
+                      </>
+                    )}
+
+                    {/* Show/Hide Hidden Entries Toggle */}
+                    {hiddenEntriesCount > 0 && (
+                      <>
+                        <div className="border-t border-gray-200 dark:border-gray-600 my-2" />
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={showHiddenFromStatusLists}
+                            onChange={() => setShowHiddenFromStatusLists(!showHiddenFromStatusLists)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5"
+                          />
+                          <span className="text-base text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                            {showHiddenFromStatusLists ? (
+                              <Eye className="w-4 h-4" />
+                            ) : (
+                              <EyeOff className="w-4 h-4" />
+                            )}
+                            {showHiddenFromStatusLists ? 'Hide' : 'Show'} Hidden Entries
+                          </span>
+                        </label>
                       </>
                     )}
                   </div>

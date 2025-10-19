@@ -36,6 +36,12 @@ export interface FilterOptions {
     sortOrder?: 'asc' | 'desc'
 }
 
+// Helper type for sorted indices
+interface SortedIndices {
+    byYear: number[]  // indices sorted by year
+    byScore: number[] // indices sorted by score
+}
+
 interface AppState {
     // User data
     user: User | null
@@ -46,6 +52,10 @@ interface AppState {
     mangaLists: MediaList[]
     isLoadingLists: boolean
     lastDataLoad: number | null // Timestamp of last successful data load
+
+    // Performance optimization: pre-sorted indices for fast range queries
+    animeSortedIndices: SortedIndices | null
+    mangaSortedIndices: SortedIndices | null
 
     // Current view
     currentType: MediaType
@@ -123,6 +133,57 @@ interface AppActions {
     getSelectedEntries: () => MediaList[]
 }
 
+// Binary search helpers for optimized range queries
+const binarySearchLowerBound = (arr: number[], target: number, getValue: (idx: number) => number): number => {
+    let left = 0
+    let right = arr.length
+    while (left < right) {
+        const mid = Math.floor((left + right) / 2)
+        if (getValue(arr[mid]) < target) {
+            left = mid + 1
+        } else {
+            right = mid
+        }
+    }
+    return left
+}
+
+const binarySearchUpperBound = (arr: number[], target: number, getValue: (idx: number) => number): number => {
+    let left = 0
+    let right = arr.length
+    while (left < right) {
+        const mid = Math.floor((left + right) / 2)
+        if (getValue(arr[mid]) <= target) {
+            left = mid + 1
+        } else {
+            right = mid
+        }
+    }
+    return left
+}
+
+// Create sorted indices for fast range queries
+const createSortedIndices = (lists: MediaList[]): SortedIndices => {
+    // Create array of indices [0, 1, 2, ...]
+    const indices = lists.map((_, idx) => idx)
+
+    // Sort by year
+    const byYear = [...indices].sort((a, b) => {
+        const yearA = lists[a].media?.startDate?.year || lists[a].media?.seasonYear || 0
+        const yearB = lists[b].media?.startDate?.year || lists[b].media?.seasonYear || 0
+        return yearA - yearB
+    })
+
+    // Sort by score
+    const byScore = [...indices].sort((a, b) => {
+        const scoreA = lists[a].score || 0
+        const scoreB = lists[b].score || 0
+        return scoreA - scoreB
+    })
+
+    return { byYear, byScore }
+}
+
 const initialState: AppState = {
     user: null,
     accessToken: null,
@@ -130,6 +191,8 @@ const initialState: AppState = {
     mangaLists: [],
     isLoadingLists: false,
     lastDataLoad: null,
+    animeSortedIndices: null,
+    mangaSortedIndices: null,
     currentType: MediaType.ANIME,
     currentStatus: 'ALL',
     viewMode: 'grid',
@@ -183,10 +246,13 @@ export const useStore = create<AppState & AppActions>()(
                     const uniqueAnimeLists = Array.from(uniqueMap.values())
 
                     if (uniqueAnimeLists.length < animeLists.length) {
-                        console.warn(`🚨 Removed ${animeLists.length - uniqueAnimeLists.length} duplicate anime entries.`)
+                        console.warn(`Removed ${animeLists.length - uniqueAnimeLists.length} duplicate anime entries`)
                     }
 
-                    set({ animeLists: uniqueAnimeLists })
+                    // Create sorted indices for performance optimization
+                    const animeSortedIndices = createSortedIndices(uniqueAnimeLists)
+
+                    set({ animeLists: uniqueAnimeLists, animeSortedIndices })
                     // Apply filters immediately after state update
                     get().applyFilters()
                 },
@@ -203,10 +269,13 @@ export const useStore = create<AppState & AppActions>()(
                     const uniqueMangaLists = Array.from(uniqueMap.values())
 
                     if (uniqueMangaLists.length < mangaLists.length) {
-                        console.warn(`🚨 Removed ${mangaLists.length - uniqueMangaLists.length} duplicate manga entries.`)
+                        console.warn(`Removed ${mangaLists.length - uniqueMangaLists.length} duplicate manga entries`)
                     }
 
-                    set({ mangaLists: uniqueMangaLists })
+                    // Create sorted indices for performance optimization
+                    const mangaSortedIndices = createSortedIndices(uniqueMangaLists)
+
+                    set({ mangaLists: uniqueMangaLists, mangaSortedIndices })
                     // Apply filters immediately after state update
                     get().applyFilters()
                 },
@@ -218,12 +287,14 @@ export const useStore = create<AppState & AppActions>()(
                         const animeLists = state.animeLists.map(entry =>
                             entry.id === updatedEntry.id ? updatedEntry : entry
                         )
-                        set({ animeLists })
+                        const animeSortedIndices = createSortedIndices(animeLists)
+                        set({ animeLists, animeSortedIndices })
                     } else {
                         const mangaLists = state.mangaLists.map(entry =>
                             entry.id === updatedEntry.id ? updatedEntry : entry
                         )
-                        set({ mangaLists })
+                        const mangaSortedIndices = createSortedIndices(mangaLists)
+                        set({ mangaLists, mangaSortedIndices })
                     }
 
                     get().applyFilters()
@@ -235,7 +306,10 @@ export const useStore = create<AppState & AppActions>()(
                     const selectedEntries = new Set(state.selectedEntries)
                     selectedEntries.delete(id)
 
-                    set({ animeLists, mangaLists, selectedEntries })
+                    const animeSortedIndices = createSortedIndices(animeLists)
+                    const mangaSortedIndices = createSortedIndices(mangaLists)
+
+                    set({ animeLists, mangaLists, selectedEntries, animeSortedIndices, mangaSortedIndices })
                     get().applyFilters()
                 },
                 setIsLoadingLists: (isLoadingLists) => set({ isLoadingLists }),
@@ -354,7 +428,8 @@ export const useStore = create<AppState & AppActions>()(
                     set({
                         currentType,
                         selectedEntries: new Set(),
-                        currentStatus: 'ALL' // Reset status when switching types
+                        currentStatus: 'ALL', // Reset status when switching types
+                        filters: initialState.filters // Clear all filters when switching media types
                     })
                     // Apply filters immediately after state update
                     get().applyFilters()
@@ -413,262 +488,216 @@ export const useStore = create<AppState & AppActions>()(
                     const state = get()
                     const { filters, currentType, currentStatus, showHiddenFromStatusLists } = state
                     let lists = state.getCurrentLists()
+                    const sortedIndices = currentType === MediaType.ANIME ? state.animeSortedIndices : state.mangaSortedIndices
 
-                    console.log('=== applyFilters START ===')
-                    console.log('Applying filters:', {
-                        currentType,
-                        currentStatus,
-                        totalLists: lists.length,
-                        filters,
-                        showHiddenFromStatusLists,
-                        sortBy: filters.sortBy || 'title',
-                        sortOrder: filters.sortOrder || 'asc',
-                        listsPreview: lists.slice(0, 2).map(e => ({
-                            id: e.id,
-                            title: e.media?.title?.userPreferred,
-                            status: e.status
-                        }))
-                    })
-
-                    // Filter by currentStatus first (this is from the status tabs)
-                    if (currentStatus !== 'ALL') {
-                        const beforeLength = lists.length
-                        lists = lists.filter(entry => entry.status === currentStatus)
-                        console.log(`After status filter (${currentStatus}): ${beforeLength} -> ${lists.length} entries`)
+                    // Early return if no lists
+                    if (lists.length === 0) {
+                        set({ filteredEntries: [] })
+                        return
                     }
 
-                    // Filter hidden entries unless showHiddenFromStatusLists is true
-                    if (!showHiddenFromStatusLists) {
-                        const beforeLength = lists.length
-                        lists = lists.filter(entry => !entry.hiddenFromStatusLists)
-                        console.log(`After hidden filter: ${beforeLength} -> ${lists.length} entries (hidden entries filtered out)`)
-                    }
+                    // Use Set for faster year/score range checking with binary search
+                    let validIndices: Set<number> | null = null
 
-                    // Apply additional status filters from FilterPanel (only if currentStatus is 'ALL')
-                    if (currentStatus === 'ALL' && filters.status && filters.status.length > 0) {
-                        lists = lists.filter(entry => {
-                            if (entry.status && filters.status!.includes(entry.status)) {
-                                return true;
+                    // OPTIMIZATION: Use binary search for year filter (O(log n) instead of O(n))
+                    if (filters.year && sortedIndices) {
+                        const yearStart = filters.year.start
+                        const yearEnd = filters.year.end
+
+                        if (yearStart !== undefined || yearEnd !== undefined) {
+                            const getYear = (idx: number) => {
+                                const entry = lists[idx]
+                                return entry.media?.startDate?.year || entry.media?.seasonYear || 0
                             }
-                            if (entry.customLists && typeof entry.customLists === 'object') {
-                                const customLists = Object.keys(entry.customLists).filter(key => entry.customLists && entry.customLists[key]);
-                                if (customLists.some(list => filters.status!.includes(list as MediaListStatus))) {
-                                    return true;
-                                }
+
+                            const lowerBound = yearStart !== undefined ? binarySearchLowerBound(sortedIndices.byYear, yearStart, getYear) : 0
+                            const upperBound = yearEnd !== undefined ? binarySearchUpperBound(sortedIndices.byYear, yearEnd, getYear) : sortedIndices.byYear.length
+
+                            validIndices = new Set(sortedIndices.byYear.slice(lowerBound, upperBound))
+                        }
+                    }
+
+                    // OPTIMIZATION: Use binary search for score filter (O(log n) instead of O(n))
+                    if (filters.score && sortedIndices) {
+                        const scoreMin = filters.score.min
+                        const scoreMax = filters.score.max
+
+                        if (scoreMin !== undefined || scoreMax !== undefined) {
+                            const getScore = (idx: number) => lists[idx].score || 0
+
+                            const lowerBound = scoreMin !== undefined ? binarySearchLowerBound(sortedIndices.byScore, scoreMin, getScore) : 0
+                            const upperBound = scoreMax !== undefined ? binarySearchUpperBound(sortedIndices.byScore, scoreMax, getScore) : sortedIndices.byScore.length
+
+                            const scoreIndices = new Set(sortedIndices.byScore.slice(lowerBound, upperBound))
+
+                            // Intersect with year filter if it exists
+                            if (validIndices) {
+                                const validArray = Array.from(validIndices).filter(idx => scoreIndices.has(idx))
+                                validIndices = new Set(validArray)
+                            } else {
+                                validIndices = scoreIndices
                             }
-                            return false;
-                        })
-                        console.log('After FilterPanel status filter:', lists.length, 'entries')
+                        }
                     }
 
-                    if (filters.format && filters.format.length > 0) {
-                        lists = lists.filter(entry =>
-                            entry.media?.format && filters.format!.includes(entry.media.format)
-                        )
+                    // Convert validIndices to actual entries if binary search was used
+                    if (validIndices !== null) {
+                        lists = Array.from(validIndices).map(idx => lists[idx])
                     }
 
-                    if (filters.genre && filters.genre.length > 0) {
-                        lists = lists.filter(entry =>
-                            entry.media?.genres?.some(genre => filters.genre!.includes(genre))
-                        )
-                    }
+                    // OPTIMIZATION: Single-pass filtering for all remaining filters
+                    lists = lists.filter(entry => {
+                        // Status filter
+                        if (currentStatus !== 'ALL' && entry.status !== currentStatus) {
+                            return false
+                        }
 
-                    if (filters.country && filters.country.length > 0) {
-                        lists = lists.filter(entry => {
+                        // Hidden filter
+                        if (!showHiddenFromStatusLists && entry.hiddenFromStatusLists) {
+                            return false
+                        }
+
+                        // Additional status filters from FilterPanel (only if currentStatus is 'ALL')
+                        if (currentStatus === 'ALL' && filters.status && filters.status.length > 0) {
+                            const hasMatchingStatus = entry.status && filters.status.includes(entry.status)
+                            const hasMatchingCustomList = entry.customLists && typeof entry.customLists === 'object' &&
+                                Object.keys(entry.customLists).filter(key => entry.customLists && entry.customLists[key])
+                                    .some(list => filters.status!.includes(list as MediaListStatus))
+
+                            if (!hasMatchingStatus && !hasMatchingCustomList) {
+                                return false
+                            }
+                        }
+
+                        // Format filter
+                        if (filters.format && filters.format.length > 0) {
+                            if (!entry.media?.format || !filters.format.includes(entry.media.format)) {
+                                return false
+                            }
+                        }
+
+                        // Genre filter
+                        if (filters.genre && filters.genre.length > 0) {
+                            if (!entry.media?.genres?.some(genre => filters.genre!.includes(genre))) {
+                                return false
+                            }
+                        }
+
+                        // Country filter
+                        if (filters.country && filters.country.length > 0) {
                             const country = entry.media?.countryOfOrigin
-                            if (!country) return false
-                            return filters.country!.includes(country)
-                        })
-                    }
+                            if (!country || !filters.country.includes(country)) {
+                                return false
+                            }
+                        }
 
-                    if (filters.year) {
-                        lists = lists.filter(entry => {
-                            const year = entry.media?.startDate?.year || entry.media?.seasonYear
-                            if (!year) return false
-                            if (filters.year!.start && year < filters.year!.start) return false
-                            if (filters.year!.end && year > filters.year!.end) return false
-                            return true
-                        })
-                    }
-
-                    if (filters.country && filters.country.length > 0) {
-                        lists = lists.filter(entry => {
-                            const country = entry.media?.countryOfOrigin
-                            if (!country) return false
-                            return filters.country!.includes(country)
-                        })
-                    }
-
-                    if (filters.score) {
-                        lists = lists.filter(entry => {
-                            const score = entry.score || 0
-                            if (filters.score!.min && score < filters.score!.min) return false
-                            if (filters.score!.max && score > filters.score!.max) return false
-                            return true
-                        })
-                    }
-
-                    if (filters.search) {
-                        const searchLower = filters.search.toLowerCase()
-                        lists = lists.filter(entry => {
+                        // Search filter
+                        if (filters.search) {
+                            const searchLower = filters.search.toLowerCase()
                             const title = entry.media?.title
-                            return (
+                            const matchesSearch =
                                 title?.romaji?.toLowerCase().includes(searchLower) ||
                                 title?.english?.toLowerCase().includes(searchLower) ||
                                 title?.native?.toLowerCase().includes(searchLower) ||
                                 title?.userPreferred?.toLowerCase().includes(searchLower)
-                            )
-                        })
-                    }
 
-                    // Apply sorting with special handling for 'ALL' status
-                    if (currentStatus === 'ALL') {
-                        // Define status order: Watching, Planning, Completed, Dropped, Paused, Rewatching
-                        const statusOrder = {
-                            [MediaListStatus.CURRENT]: 0,     // Watching
-                            [MediaListStatus.PLANNING]: 1,    // Planning
-                            [MediaListStatus.COMPLETED]: 2,   // Completed
-                            [MediaListStatus.DROPPED]: 3,     // Dropped
-                            [MediaListStatus.PAUSED]: 4,      // Paused
-                            [MediaListStatus.REPEATING]: 5,   // Rewatching
+                            if (!matchesSearch) {
+                                return false
+                            }
                         }
 
-                        lists.sort((a, b) => {
-                            // First, sort by status
+                        // Year filter (fallback when binary search wasn't used)
+                        if (validIndices === null && filters.year) {
+                            const year = entry.media?.startDate?.year || entry.media?.seasonYear
+                            if (year) {
+                                if (filters.year.start !== undefined && year < filters.year.start) {
+                                    return false
+                                }
+                                if (filters.year.end !== undefined && year > filters.year.end) {
+                                    return false
+                                }
+                            }
+                        }
+
+                        // Score filter (fallback when binary search wasn't used)
+                        if (validIndices === null && filters.score) {
+                            const score = entry.score || 0
+                            if (filters.score.min !== undefined && score < filters.score.min) {
+                                return false
+                            }
+                            if (filters.score.max !== undefined && score > filters.score.max) {
+                                return false
+                            }
+                        }
+
+                        return true
+                    })
+
+                    // OPTIMIZATION: Extract common sorting logic to avoid duplication
+                    const sortBy = filters.sortBy || 'title'
+                    const sortOrder = filters.sortOrder || 'asc'
+
+                    const getSortValue = (entry: MediaList) => {
+                        switch (sortBy) {
+                            case 'title':
+                                return entry.media?.title?.userPreferred || entry.media?.title?.romaji || ''
+                            case 'score':
+                                return entry.score || 0
+                            case 'progress':
+                                return entry.progress || 0
+                            case 'startDate':
+                                return entry.startedAt?.year || 0
+                            case 'updatedAt':
+                                return entry.updatedAt || 0
+                            default:
+                                return ''
+                        }
+                    }
+
+                    lists.sort((a, b) => {
+                        // For 'ALL' status, first sort by status order
+                        if (currentStatus === 'ALL') {
+                            const statusOrder = {
+                                [MediaListStatus.CURRENT]: 0,
+                                [MediaListStatus.PLANNING]: 1,
+                                [MediaListStatus.COMPLETED]: 2,
+                                [MediaListStatus.DROPPED]: 3,
+                                [MediaListStatus.PAUSED]: 4,
+                                [MediaListStatus.REPEATING]: 5,
+                            }
+
                             const aStatusOrder = statusOrder[a.status as MediaListStatus] ?? 999
                             const bStatusOrder = statusOrder[b.status as MediaListStatus] ?? 999
 
                             if (aStatusOrder !== bStatusOrder) {
                                 return aStatusOrder - bStatusOrder
                             }
-
-                            // Within same status, sort by the selected criteria
-                            const sortBy = filters.sortBy || 'title'
-                            const sortOrder = filters.sortOrder || 'asc'
-                            if (sortBy) {
-                                let aValue: any, bValue: any
-
-                                switch (sortBy) {
-                                    case 'title':
-                                        aValue = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
-                                        bValue = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
-                                        break
-                                    case 'score':
-                                        aValue = a.score || 0
-                                        bValue = b.score || 0
-                                        break
-                                    case 'progress':
-                                        aValue = a.progress || 0
-                                        bValue = b.progress || 0
-                                        break
-                                    case 'startDate':
-                                        aValue = a.startedAt?.year || 0
-                                        bValue = b.startedAt?.year || 0
-                                        break
-                                    case 'updatedAt':
-                                        aValue = a.updatedAt || 0
-                                        bValue = b.updatedAt || 0
-                                        break
-                                    default:
-                                        return 0
-                                }
-
-                                if (typeof aValue === 'string') {
-                                    const comparison = aValue.localeCompare(bValue)
-                                    return sortOrder === 'desc' ? -comparison : comparison
-                                } else {
-                                    const comparison = aValue - bValue
-                                    // If sorting by score and scores are equal, sort alphabetically by title
-                                    if (sortBy === 'score' && comparison === 0) {
-                                        const aTitle = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
-                                        const bTitle = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
-                                        return aTitle.localeCompare(bTitle)
-                                    }
-                                    return sortOrder === 'desc' ? -comparison : comparison
-                                }
-                            }
-
-                            return 0
-                        })
-                    } else {
-                        // Regular sorting for specific status views
-                        const sortBy = filters.sortBy || 'title'
-                        const sortOrder = filters.sortOrder || 'asc'
-                        if (sortBy) {
-                            lists.sort((a, b) => {
-                                let aValue: any, bValue: any
-
-                                switch (sortBy) {
-                                    case 'title':
-                                        aValue = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
-                                        bValue = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
-                                        break
-                                    case 'score':
-                                        aValue = a.score || 0
-                                        bValue = b.score || 0
-                                        break
-                                    case 'progress':
-                                        aValue = a.progress || 0
-                                        bValue = b.progress || 0
-                                        break
-                                    case 'startDate':
-                                        aValue = a.startedAt?.year || 0
-                                        bValue = b.startedAt?.year || 0
-                                        break
-                                    case 'updatedAt':
-                                        aValue = a.updatedAt || 0
-                                        bValue = b.updatedAt || 0
-                                        break
-                                    default:
-                                        return 0
-                                }
-
-                                if (typeof aValue === 'string') {
-                                    const comparison = aValue.localeCompare(bValue)
-                                    return sortOrder === 'desc' ? -comparison : comparison
-                                } else {
-                                    const comparison = aValue - bValue
-                                    // If sorting by score and scores are equal, sort alphabetically by title
-                                    if (sortBy === 'score' && comparison === 0) {
-                                        const aTitle = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
-                                        const bTitle = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
-                                        return aTitle.localeCompare(bTitle)
-                                    }
-                                    return sortOrder === 'desc' ? -comparison : comparison
-                                }
-                            })
                         }
-                    }
 
-                    // Check for and remove duplicates before setting filteredEntries
-                    const duplicateCheck = new Map()
-                    const duplicates: number[] = []
-                    lists.forEach(entry => {
-                        if (duplicateCheck.has(entry.id)) {
-                            duplicates.push(entry.id)
+                        // Then sort by selected criteria
+                        const aValue = getSortValue(a)
+                        const bValue = getSortValue(b)
+
+                        if (typeof aValue === 'string') {
+                            const comparison = aValue.localeCompare(bValue as string)
+                            return sortOrder === 'desc' ? -comparison : comparison
                         } else {
-                            duplicateCheck.set(entry.id, entry)
+                            const comparison = (aValue as number) - (bValue as number)
+                            // If sorting by score and scores are equal, sort alphabetically by title
+                            if (sortBy === 'score' && comparison === 0) {
+                                const aTitle = a.media?.title?.userPreferred || a.media?.title?.romaji || ''
+                                const bTitle = b.media?.title?.userPreferred || b.media?.title?.romaji || ''
+                                return aTitle.localeCompare(bTitle)
+                            }
+                            return sortOrder === 'desc' ? -comparison : comparison
                         }
                     })
 
-                    if (duplicates.length > 0) {
-                        console.warn('🚨 Found duplicate entries with IDs:', duplicates)
-                        // Remove duplicates by using Map to keep only unique entries by ID
-                        const uniqueMap = new Map()
-                        lists.forEach(entry => {
-                            uniqueMap.set(entry.id, entry)
-                        })
-                        lists = Array.from(uniqueMap.values())
-                        console.log('✅ Removed duplicates, new count:', lists.length)
-                    }
+                    // Remove duplicates (Map-based deduplication is faster than iterating)
+                    const uniqueMap = new Map<number, MediaList>()
+                    lists.forEach(entry => uniqueMap.set(entry.id, entry))
+                    lists = Array.from(uniqueMap.values())
 
-                    console.log('Final filtered entries:', lists.length)
-                    console.log('Final entries preview:', lists.slice(0, 3).map(e => ({
-                        id: e.id,
-                        title: e.media?.title?.userPreferred,
-                        status: e.status
-                    })))
-                    console.log('=== applyFilters END ===')
                     set({ filteredEntries: lists })
                 },
 
