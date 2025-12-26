@@ -104,6 +104,44 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
             arr.slice(i * size, i * size + size)
         );
 
+    // Helper function for chunked updates using query chaining (bulkSaveMediaListEntries)
+    const performChunkedUpdate = async (
+        entriesToUpdate: Array<{ mediaId: number; updates: any }>,
+        totalEntries: number
+    ): Promise<{ successfulCount: number; failedCount: number }> => {
+        let successfulCount = 0
+        let failedCount = 0
+
+        const chunks = chunk(entriesToUpdate, 10)
+
+        for (const chunkItems of chunks) {
+            if (isCancelling) break
+            try {
+                const results = await rateLimiterRef.current!.execute(async () => {
+                    return await client!.bulkSaveMediaListEntries(chunkItems)
+                })
+                successfulCount += results.length
+                results.forEach(result => {
+                    updateMediaListEntry(result)
+                })
+            } catch (error: any) {
+                console.error('Bulk update for chunk failed:', error)
+                failedCount += chunkItems.length
+                addNotification({
+                    type: 'error',
+                    message: `Failed to update a batch of entries. ${error.message || 'Please try again.'}`
+                })
+            }
+            setProcessProgress({
+                current: successfulCount + failedCount,
+                total: totalEntries,
+                successful: successfulCount,
+                failed: failedCount
+            })
+        }
+
+        return { successfulCount, failedCount }
+    }
 
     const handleBulkOperation = async () => {
         if (!client || selectedCount === 0) return
@@ -147,45 +185,66 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                 message: `Starting bulk update of ${totalEntries} entries...`
             })
 
-            const entriesToUpdate = selectedMediaLists.map(entry => {
-                const entryUpdates = { ...updates };
-                if (hasCustomListChanges) {
-                    const currentCustomLists = Object.keys(entry.customLists || {}).filter(listName => entry.customLists && entry.customLists[listName]);
-                    const listsToRemove = new Set(Object.keys(customListChanges));
-                    const listsToAdd = new Set(Object.entries(customListChanges).filter(([, v]) => v).map(([k]) => k));
-                    let finalCustomLists = currentCustomLists.filter(list => !listsToRemove.has(list));
-                    finalCustomLists = [...finalCustomLists, ...Array.from(listsToAdd)];
-                    entryUpdates.customLists = Array.from(new Set(finalCustomLists));
-                }
-                return { mediaId: entry.mediaId, updates: entryUpdates };
-            });
-
-            const chunks = chunk(entriesToUpdate, 10);
-
-            for (const chunk of chunks) {
-                if (isCancelling) break;
+            if (!hasCustomListChanges) {
+                // Fast path: Use UpdateMediaListEntries for a single API call
+                // This is more efficient when not updating custom lists
                 try {
+                    const entryIds = selectedMediaLists.map(e => e.id)
+                    
                     const results = await rateLimiterRef.current.execute(async () => {
-                        return await client.bulkSaveMediaListEntries(chunk);
-                    });
-                    successfulCount += results.length;
+                        return await client.updateMediaListEntries(entryIds, updates)
+                    })
+                    
+                    successfulCount = results.length
                     results.forEach(result => {
-                        updateMediaListEntry(result);
-                    });
+                        updateMediaListEntry(result)
+                    })
+                    
+                    setProcessProgress({
+                        current: totalEntries,
+                        total: totalEntries,
+                        successful: successfulCount,
+                        failed: 0
+                    })
                 } catch (error: any) {
-                    console.error('Bulk update for chunk failed:', error);
-                    failedCount += chunk.length;
+                    // Fall back to chunked method if UpdateMediaListEntries fails
+                    console.error('UpdateMediaListEntries failed, falling back to chunked method:', error)
                     addNotification({
-                        type: 'error',
-                        message: `Failed to update a batch of entries. ${error.message || 'Please try again.'}`
-                    });
+                        type: 'info',
+                        message: 'Retrying with alternative method...'
+                    })
+                    
+                    const entriesToUpdate = selectedMediaLists.map(entry => ({
+                        mediaId: entry.mediaId,
+                        updates
+                    }))
+                    const result = await performChunkedUpdate(entriesToUpdate, totalEntries)
+                    successfulCount = result.successfulCount
+                    failedCount = result.failedCount
                 }
-                setProcessProgress({
-                    current: successfulCount + failedCount,
-                    total: totalEntries,
-                    successful: successfulCount,
-                    failed: failedCount
-                });
+            } else {
+                // Custom lists path: Use chunked bulkSaveMediaListEntries
+                // This handles per-entry customLists logic
+                const entriesToUpdate = selectedMediaLists.map(entry => {
+                    const entryUpdates = { ...updates }
+                    const currentCustomLists = Object.keys(entry.customLists || {}).filter(
+                        listName => entry.customLists && entry.customLists[listName]
+                    )
+                    const listsToRemove = new Set(Object.keys(customListChanges))
+                    const listsToAdd = new Set(
+                        Object.entries(customListChanges)
+                            .filter(([, v]) => v)
+                            .map(([k]) => k)
+                    )
+                    let finalCustomLists = currentCustomLists.filter(list => !listsToRemove.has(list))
+                    finalCustomLists = [...finalCustomLists, ...Array.from(listsToAdd)]
+                    entryUpdates.customLists = Array.from(new Set(finalCustomLists))
+                    return { mediaId: entry.mediaId, updates: entryUpdates }
+                })
+
+                const result = await performChunkedUpdate(entriesToUpdate, totalEntries)
+                successfulCount = result.successfulCount
+                failedCount = result.failedCount
             }
 
             setProcessProgress({
