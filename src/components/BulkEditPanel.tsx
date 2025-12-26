@@ -16,7 +16,10 @@ import {
     Settings,
     Activity,
     Clock,
-    Zap
+    Zap,
+    Trash2,
+    AlertTriangle,
+    XSquare
 } from 'lucide-react'
 
 interface BulkEditPanelProps {
@@ -35,10 +38,14 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         clearSelection,
         getSelectedEntries,
         updateMediaListEntry,
+        removeMediaListEntry,
         addNotification
     } = useStore()
 
     const [isProcessing, setIsProcessing] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+    const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0, successful: 0, failed: 0 })
     const [bulkOptions, setBulkOptions] = useState({
         status: '' as MediaListStatus | '',
         score: '',
@@ -46,7 +53,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         private: '',
         hiddenFromStatusLists: '',
         notes: '',
-        customLists: {} as Record<string, boolean>
+        customLists: {} as Record<string, 'add' | 'remove' | null>
     })
     const [showAdvanced, setShowAdvanced] = useState(false)
     const [showRateLimitConfig, setShowRateLimitConfig] = useState(false)
@@ -157,7 +164,8 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         if (bulkOptions.notes.trim()) updates.notes = bulkOptions.notes
 
         const customListChanges = bulkOptions.customLists
-        const hasCustomListChanges = Object.keys(customListChanges).length > 0
+        // Only consider it a change if there's at least one 'add' or 'remove' action
+        const hasCustomListChanges = Object.values(customListChanges).some(v => v === 'add' || v === 'remove')
 
         if (Object.keys(updates).length === 0 && !hasCustomListChanges) {
             addNotification({
@@ -224,21 +232,27 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                 }
             } else {
                 // Custom lists path: Use chunked bulkSaveMediaListEntries
-                // This handles per-entry customLists logic
+                // This handles per-entry customLists logic with tri-state (add/remove/null)
                 const entriesToUpdate = selectedMediaLists.map(entry => {
                     const entryUpdates = { ...updates }
+                    // Get current custom lists the entry belongs to
                     const currentCustomLists = Object.keys(entry.customLists || {}).filter(
                         listName => entry.customLists && entry.customLists[listName]
                     )
-                    const listsToRemove = new Set(Object.keys(customListChanges))
-                    const listsToAdd = new Set(
+                    // Get lists to add (state === 'add')
+                    const listsToAdd = Object.entries(customListChanges)
+                        .filter(([, v]) => v === 'add')
+                        .map(([k]) => k)
+                    // Get lists to remove (state === 'remove')
+                    const listsToRemove = new Set(
                         Object.entries(customListChanges)
-                            .filter(([, v]) => v)
+                            .filter(([, v]) => v === 'remove')
                             .map(([k]) => k)
                     )
+                    // Build final list: keep current lists (except removed ones), add new ones
                     let finalCustomLists = currentCustomLists.filter(list => !listsToRemove.has(list))
-                    finalCustomLists = [...finalCustomLists, ...Array.from(listsToAdd)]
-                    entryUpdates.customLists = Array.from(new Set(finalCustomLists))
+                    finalCustomLists = Array.from(new Set([...finalCustomLists, ...listsToAdd]))
+                    entryUpdates.customLists = finalCustomLists
                     return { mediaId: entry.mediaId, updates: entryUpdates }
                 })
 
@@ -296,6 +310,88 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
             })
         } finally {
             setIsProcessing(false)
+            setIsCancelling(false)
+        }
+    }
+
+    const handleBulkDelete = async () => {
+        if (!client || selectedCount === 0) return
+
+        // Close confirmation modal
+        setShowDeleteConfirmation(false)
+        setIsDeleting(true)
+        setIsCancelling(false)
+
+        const selectedMediaLists = getSelectedEntries()
+        const totalEntries = selectedMediaLists.length
+        setDeleteProgress({ current: 0, total: totalEntries, successful: 0, failed: 0 })
+
+        // Initialize rate limiter with current config
+        rateLimiterRef.current = new RateLimiter(rateLimiterConfig)
+
+        let successfulCount = 0
+        let failedCount = 0
+
+        try {
+            addNotification({
+                type: 'info',
+                message: `Starting bulk delete of ${totalEntries} entries...`
+            })
+
+            for (const entry of selectedMediaLists) {
+                if (isCancelling) break
+
+                try {
+                    await rateLimiterRef.current.execute(async () => {
+                        await client.deleteMediaListEntry(entry.id)
+                    })
+                    removeMediaListEntry(entry.id)
+                    successfulCount++
+                } catch (error: any) {
+                    console.error(`Failed to delete entry ${entry.id}:`, error)
+                    failedCount++
+                }
+
+                setDeleteProgress({
+                    current: successfulCount + failedCount,
+                    total: totalEntries,
+                    successful: successfulCount,
+                    failed: failedCount
+                })
+
+                // Update rate limiter stats for display
+                if (rateLimiterRef.current) {
+                    setRateLimiterStats(rateLimiterRef.current.getStats())
+                }
+            }
+
+            const finalStats = rateLimiterRef.current?.getStats()
+            if (finalStats) {
+                setRateLimiterStats(finalStats)
+            }
+
+            addNotification({
+                type: successfulCount > 0 ? 'success' : 'error',
+                message: `Bulk delete completed: ${successfulCount} deleted, ${failedCount} failed${finalStats ? `. Rate limit hits: ${finalStats.rateLimitHits}, Retries: ${finalStats.retriedRequests}` : ''}`
+            })
+
+            // Re-fetch the entire list to ensure data consistency
+            if (user) {
+                useStore.getState().fetchMediaLists(user.id, currentType, true)
+            }
+
+            // Reset selection and exit bulk edit mode
+            clearSelection()
+            setBulkEditMode(false)
+
+        } catch (error: any) {
+            console.error('Bulk delete failed:', error)
+            addNotification({
+                type: 'error',
+                message: `Bulk delete failed. ${error.message || 'Please try again.'}`
+            })
+        } finally {
+            setIsDeleting(false)
             setIsCancelling(false)
         }
     }
@@ -488,29 +584,41 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                     Custom Lists
                                 </h5>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                    {availableCustomLists.map(listName => (
-                                        <label key={listName} className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={bulkOptions.customLists[listName] || false}
-                                                onChange={(e) => setBulkOptions(prev => ({
-                                                    ...prev,
-                                                    customLists: {
-                                                        ...prev.customLists,
-                                                        [listName]: e.target.checked
-                                                    }
-                                                }))}
-                                                className="checkbox"
-                                            />
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">
-                                                {listName}
-                                            </span>
-                                        </label>
-                                    ))}
+                                    {availableCustomLists.map(listName => {
+                                        const state = bulkOptions.customLists[listName] || null
+                                        
+                                        const cycleState = () => {
+                                            // null -> 'add' -> 'remove' -> null
+                                            const nextState: 'add' | 'remove' | null = 
+                                                state === null ? 'add' : state === 'add' ? 'remove' : null
+                                            setBulkOptions(prev => ({
+                                                ...prev,
+                                                customLists: {
+                                                    ...prev.customLists,
+                                                    [listName]: nextState
+                                                }
+                                            }))
+                                        }
+                                        
+                                        return (
+                                            <button
+                                                key={listName}
+                                                type="button"
+                                                onClick={cycleState}
+                                                className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
+                                            >
+                                                {state === null && <Square className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                                                {state === 'add' && <CheckSquare className="w-4 h-4 text-green-500 flex-shrink-0" />}
+                                                {state === 'remove' && <XSquare className="w-4 h-4 text-red-500 flex-shrink-0" />}
+                                                <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                                                    {listName}
+                                                </span>
+                                            </button>
+                                        )
+                                    })}
                                 </div>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                    <strong>Note:</strong> Selected entries will be added to the checked custom lists.
-                                    To remove from custom lists, uncheck them (entries will be removed from those lists).
+                                    <strong>Note:</strong> Click to cycle through states: Empty (no change) → Checkmark (add to list) → X (remove from list)
                                 </p>
                             </div>
                         )}
@@ -723,21 +831,61 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                         </div>
                     )}
 
+                    {/* Delete Progress Bar */}
+                    {isDeleting && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-red-600 dark:text-red-400 flex items-center gap-2">
+                                    <Trash2 className="w-4 h-4" />
+                                    Deleting... ({deleteProgress.current}/{deleteProgress.total})
+                                    {rateLimiterStats && rateLimiterStats.currentQueueSize > 0 && (
+                                        <span className="text-orange-600 dark:text-orange-400">
+                                            • Queue: {rateLimiterStats.currentQueueSize}
+                                        </span>
+                                    )}
+                                </span>
+                                <span className="text-gray-600 dark:text-gray-400">
+                                    {deleteProgress.total > 0 ? Math.min(100, Math.round((deleteProgress.current / deleteProgress.total) * 100)) : 0}%
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div
+                                    className="bg-red-500 h-2 rounded-full transition-all duration-300"
+                                    style={{
+                                        width: deleteProgress.total > 0
+                                            ? `${Math.min(100, (deleteProgress.current / deleteProgress.total) * 100)}%`
+                                            : '0%'
+                                    }}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                                <span>Deleted: {deleteProgress.successful}</span>
+                                <span>Failed: {deleteProgress.failed}</span>
+                                {rateLimiterStats && (
+                                    <>
+                                        <span>Rate Limits: {rateLimiterStats.rateLimitHits}</span>
+                                        <span>Retries: {rateLimiterStats.retriedRequests}</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Action Buttons */}
                     <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-600">
                         <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {selectedCount} {selectedCount === 1 ? 'entry' : 'entries'} will be updated
+                            {selectedCount} {selectedCount === 1 ? 'entry' : 'entries'} selected
                         </div>
 
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => {
-                                    if (isProcessing) {
+                                    if (isProcessing || isDeleting) {
                                         if (rateLimiterRef.current) {
                                             rateLimiterRef.current.stop()
                                         }
                                         setIsCancelling(true)
-                                        addNotification({ type: 'info', message: 'Cancelling bulk edit... The current item will finish processing.' })
+                                        addNotification({ type: 'info', message: 'Cancelling... The current item will finish processing.' })
                                     } else {
                                         setBulkEditMode(false)
                                         clearSelection()
@@ -746,11 +894,19 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                 className="btn-secondary"
                                 disabled={isCancelling}
                             >
-                                {isProcessing ? (isCancelling ? 'Cancelling...' : 'Cancel') : 'Cancel'}
+                                {(isProcessing || isDeleting) ? (isCancelling ? 'Cancelling...' : 'Cancel') : 'Cancel'}
+                            </button>
+                            <button
+                                onClick={() => setShowDeleteConfirmation(true)}
+                                disabled={isProcessing || isDeleting || selectedCount === 0}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                Delete Entries
                             </button>
                             <button
                                 onClick={handleBulkOperation}
-                                disabled={isProcessing || selectedCount === 0}
+                                disabled={isProcessing || isDeleting || selectedCount === 0}
                                 className="btn-primary flex items-center gap-2"
                             >
                                 {isProcessing ? (
@@ -770,6 +926,62 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                     <CheckSquare className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Select entries to bulk edit</p>
                     <p className="text-sm">Use the checkboxes on each entry to select them</p>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirmation && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    {/* Backdrop */}
+                    <div 
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        onClick={() => setShowDeleteConfirmation(false)}
+                    />
+                    
+                    {/* Modal */}
+                    <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 space-y-4">
+                        {/* Header */}
+                        <div className="flex items-center gap-3">
+                            <div className="flex-shrink-0 w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                                <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Confirm Bulk Delete
+                                </h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    This action cannot be undone
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="py-2">
+                            <p className="text-gray-700 dark:text-gray-300">
+                                Are you sure you want to remove <strong className="text-red-600 dark:text-red-400">{selectedCount} {selectedCount === 1 ? 'entry' : 'entries'}</strong> from your list?
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                                These entries will be permanently deleted from your AniList account.
+                            </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-end gap-3 pt-2">
+                            <button
+                                onClick={() => setShowDeleteConfirmation(false)}
+                                className="btn-secondary"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleBulkDelete}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                Delete {selectedCount} {selectedCount === 1 ? 'Entry' : 'Entries'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
