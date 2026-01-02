@@ -19,14 +19,19 @@ import {
     Zap,
     Trash2,
     AlertTriangle,
-    XSquare
+    XSquare,
+    ChevronRight,
+    ChevronLeft
 } from 'lucide-react'
 
 interface BulkEditPanelProps {
     client: AniListClient | null
+    onClose?: () => void
+    isMobile?: boolean
+    isOpen?: boolean
 }
 
-export default function BulkEditPanel({ client }: BulkEditPanelProps) {
+export default function BulkEditPanel({ client, onClose, isMobile = false, isOpen = true }: BulkEditPanelProps) {
     const {
         selectedEntries,
         bulkEditMode,
@@ -398,57 +403,74 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
 
     if (!bulkEditMode) {
         return (
-            <div className="card p-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Edit3 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                        <div>
-                            <h3 className="font-medium text-gray-900 dark:text-white">Bulk Edit</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                Select multiple entries to edit them at once
-                            </p>
-                        </div>
-                    </div>
+            <div className={`${isMobile ? 'w-full' : 'w-full'} bg-white dark:bg-gray-800 h-full flex flex-col relative`}>
+                {!isMobile && onClose && isOpen && (
                     <button
-                        onClick={() => setBulkEditMode(true)}
-                        className="btn-primary"
+                        onClick={onClose}
+                        className="sidebar-drag-handle sidebar-drag-handle-right"
+                        aria-label="Close bulk edit"
                     >
-                        Enable Bulk Edit
+                        <ChevronRight className="w-4 h-4" />
                     </button>
+                )}
+                <div className="p-4 overflow-y-auto flex-1">
+                    <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
+                        <Edit3 className="w-12 h-12 text-gray-400 dark:text-gray-500 mb-4" />
+                        <h3 className="font-medium text-gray-900 dark:text-white mb-2">Bulk Edit</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            Select multiple entries to edit them at once
+                        </p>
+                        <button
+                            onClick={() => setBulkEditMode(true)}
+                            className="btn-primary"
+                        >
+                            Enable Bulk Edit
+                        </button>
+                    </div>
                 </div>
             </div>
         )
     }
 
     return (
-        <div className="card p-6 space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <CheckSquare className="w-5 h-5 text-blue-600" />
-                    <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">
-                            Bulk Edit Mode
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {selectedCount} of {totalCount} entries selected
-                        </p>
-                        <p className="text-xs text-blue-600 dark:text-blue-400">
-                            💡 Click anywhere on a card to select it
-                        </p>
-                    </div>
-                </div>
+        <div className={`${isMobile ? 'w-full' : 'w-full'} bg-white dark:bg-gray-800 h-full flex flex-col relative`}>
+            {!isMobile && onClose && isOpen && (
                 <button
-                    onClick={() => {
-                        setBulkEditMode(false)
-                        clearSelection()
-                    }}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                    title="Exit Bulk Edit"
+                    onClick={onClose}
+                    className="sidebar-drag-handle sidebar-drag-handle-right"
+                    aria-label="Close bulk edit"
                 >
-                    <X className="w-5 h-5" />
+                    <ChevronRight className="w-4 h-4" />
                 </button>
-            </div>
+            )}
+            <div className="p-4 space-y-4 overflow-y-auto flex-1">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <CheckSquare className="w-5 h-5 text-blue-600" />
+                        <div>
+                            <h3 className="font-medium text-gray-900 dark:text-white">
+                                Bulk Edit Mode
+                            </h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {selectedCount} of {totalCount} selected
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => {
+                            setBulkEditMode(false)
+                            clearSelection()
+                        }}
+                        className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                        title="Exit Bulk Edit"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                    💡 Click anywhere on a card to select it
+                </p>
 
             {/* Selection Controls */}
             <div className="flex items-center gap-4">
@@ -928,6 +950,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                     <p className="text-sm">Use the checkboxes on each entry to select them</p>
                 </div>
             )}
+            </div>
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirmation && (

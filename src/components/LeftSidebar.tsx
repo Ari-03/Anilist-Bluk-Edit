@@ -17,8 +17,15 @@ import {
   ArrowUpDown,
   ChevronRight,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronLeft
 } from 'lucide-react'
+
+interface LeftSidebarProps {
+  onClose?: () => void
+  isMobile?: boolean
+  isOpen?: boolean
+}
 
 const ANIME_FORMATS = [
   { value: MediaFormat.TV, label: 'TV Series' },
@@ -36,7 +43,7 @@ const MANGA_FORMATS = [
   { value: MediaFormat.ONE_SHOT, label: 'One Shot' }
 ]
 
-export default function LeftSidebar() {
+export default function LeftSidebar({ onClose, isMobile = false, isOpen = true }: LeftSidebarProps) {
   const {
     currentType,
     setCurrentType,
@@ -245,7 +252,16 @@ export default function LeftSidebar() {
   )
 
   return (
-    <div className="w-80 md:w-80 sm:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 hidden md:block sticky top-16 min-h-screen flex flex-col">
+    <div className={`${isMobile ? 'w-full' : 'w-80'} bg-white dark:bg-gray-800 h-full flex flex-col relative`}>
+      {!isMobile && onClose && isOpen && (
+        <button
+          onClick={onClose}
+          className="sidebar-drag-handle sidebar-drag-handle-left"
+          aria-label="Close filters"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+      )}
       <div className="p-4 space-y-4 overflow-y-auto flex-1">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -363,10 +379,9 @@ export default function LeftSidebar() {
               <ChevronRight className="h-4 w-4" />
             </button>
 
-            {/* Status Pop-out Panel */}
             {activePopout === 'status' && popoutPosition && (
               <div
-                className="fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-4"
+                className="popout-panel"
                 style={{ top: popoutPosition.top, left: popoutPosition.left }}
               >
                 <div className="space-y-2">
@@ -446,10 +461,9 @@ export default function LeftSidebar() {
               <ChevronRight className="h-4 w-4" />
             </button>
 
-            {/* Genre Pop-out Panel */}
             {activePopout === 'genre' && popoutPosition && (
               <div
-                className="fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-4"
+                className="popout-panel"
                 style={{ top: popoutPosition.top, left: popoutPosition.left }}
               >
                 <div className="space-y-3">
@@ -524,10 +538,9 @@ export default function LeftSidebar() {
               <ChevronRight className="h-4 w-4" />
             </button>
 
-            {/* Format Pop-out Panel */}
             {activePopout === 'format' && popoutPosition && (
               <div
-                className="fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-4"
+                className="popout-panel"
                 style={{ top: popoutPosition.top, left: popoutPosition.left }}
               >
                 <div className="space-y-2">
@@ -568,10 +581,9 @@ export default function LeftSidebar() {
               <ChevronRight className="h-4 w-4" />
             </button>
 
-            {/* Country Pop-out Panel */}
             {activePopout === 'country' && popoutPosition && (
               <div
-                className="fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-4"
+                className="popout-panel"
                 style={{ top: popoutPosition.top, left: popoutPosition.left }}
               >
                 <div className="space-y-2">
@@ -612,10 +624,9 @@ export default function LeftSidebar() {
               <ChevronRight className="h-4 w-4" />
             </button>
 
-            {/* Year Pop-out Panel */}
             {activePopout === 'year' && popoutPosition && (
               <div
-                className="fixed w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-2"
+                className="popout-panel !w-96 !p-2"
                 style={{ top: popoutPosition.top, left: popoutPosition.left }}
               >
                 <div className="space-y-4">
@@ -730,10 +741,9 @@ export default function LeftSidebar() {
               <ChevronRight className="h-4 w-4" />
             </button>
 
-            {/* Score Pop-out Panel */}
             {activePopout === 'score' && popoutPosition && (
               <div
-                className="fixed w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-[9999] p-2"
+                className="popout-panel !w-96 !p-2"
                 style={{ top: popoutPosition.top, left: popoutPosition.left }}
               >
                 <div className="space-y-4">

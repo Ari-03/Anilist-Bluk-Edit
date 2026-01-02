@@ -238,3 +238,174 @@
 }
 
 /* Remove dark mode thumb styles since thumbs are hidden */
+
+/* Sidebar styles */
+.sidebar-left {
+    @apply fixed top-16 left-0 h-[calc(100vh-4rem)] w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-40 transform transition-transform duration-300 ease-out;
+}
+
+.sidebar-left.open {
+    @apply translate-x-0;
+}
+
+.sidebar-left.closed {
+    @apply -translate-x-full;
+}
+
+.sidebar-right {
+    @apply fixed top-16 right-0 h-[calc(100vh-4rem)] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 z-40 transform transition-transform duration-300 ease-out;
+    width: 640px;
+}
+
+.sidebar-right.open {
+    @apply translate-x-0;
+}
+
+.sidebar-right.closed {
+    @apply translate-x-full;
+}
+
+.sidebar-content {
+    @apply h-full overflow-y-auto overflow-x-hidden;
+}
+
+.sidebar-drag-handle {
+    @apply absolute top-1/2 -translate-y-1/2 w-6 h-12 flex items-center justify-center cursor-pointer rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-110;
+}
+
+.sidebar-drag-handle-left {
+    @apply -right-3;
+}
+
+.sidebar-drag-handle-right {
+    @apply -left-3;
+}
+
+/* Mobile FAB styles */
+.fab-container {
+    @apply fixed bottom-6 right-6 z-50;
+}
+
+.fab-button {
+    @apply w-14 h-14 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95;
+}
+
+.fab-menu {
+    @apply absolute bottom-16 right-0 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden min-w-48;
+}
+
+.fab-menu-item {
+    @apply flex items-center gap-3 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 w-full text-left;
+}
+
+.fab-menu-item-icon {
+    @apply w-5 h-5;
+}
+
+.fab-menu-divider {
+    @apply border-t border-gray-200 dark:border-gray-700;
+}
+
+@keyframes fabMenuSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.fab-menu-enter {
+    animation: fabMenuSlideUp 0.2s ease-out forwards;
+}
+
+/* Mobile overlay styles */
+.mobile-overlay-backdrop {
+    @apply fixed inset-0 bg-black/50 z-50 transition-opacity duration-300;
+}
+
+.mobile-overlay-backdrop.entering {
+    @apply opacity-0;
+}
+
+.mobile-overlay-backdrop.entered {
+    @apply opacity-100;
+}
+
+.mobile-overlay-panel {
+    @apply fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-2xl z-50 transform transition-transform duration-300 ease-out;
+    max-height: 85vh;
+}
+
+.mobile-overlay-panel.entering {
+    @apply translate-y-full;
+}
+
+.mobile-overlay-panel.entered {
+    @apply translate-y-0;
+}
+
+.mobile-overlay-header {
+    @apply flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 rounded-t-2xl;
+}
+
+.mobile-overlay-handle {
+    @apply w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-2;
+}
+
+.mobile-overlay-content {
+    @apply overflow-y-auto;
+    max-height: calc(85vh - 60px);
+}
+
+/* Header toggle button styles */
+.header-toggle-btn {
+    @apply flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors;
+}
+
+.header-toggle-btn.active {
+    @apply bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400;
+}
+
+.header-toggle-badge {
+    @apply inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-medium bg-blue-500 text-white rounded-full;
+}
+
+.popout-panel {
+    @apply fixed w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-4;
+    z-index: 9999;
+}
+
+.popout-panel::before {
+    content: '';
+    position: absolute;
+    left: -12px;
+    top: 16px;
+    width: 0;
+    height: 0;
+    border-top: 12px solid transparent;
+    border-bottom: 12px solid transparent;
+    border-right: 12px solid #d1d5db;
+}
+
+.popout-panel::after {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 17px;
+    width: 0;
+    height: 0;
+    border-top: 11px solid transparent;
+    border-bottom: 11px solid transparent;
+    border-right: 11px solid white;
+}
+
+.dark .popout-panel::before {
+    border-right-color: #4b5563;
+}
+
+.dark .popout-panel::after {
+    border-right-color: #1f2937;
+}

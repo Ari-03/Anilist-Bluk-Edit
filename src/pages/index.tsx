@@ -12,7 +12,9 @@ import LeftSidebar from '@/components/LeftSidebar'
 import NotificationList from '@/components/NotificationList'
 import DebugPanel from '@/components/DebugPanel'
 import TokenLogin from '@/components/TokenLogin'
-import { Loader2, LogIn, LogOut, User, Moon, Sun, RotateCcw } from 'lucide-react'
+import MobileFAB from '@/components/MobileFAB'
+import MobileOverlay from '@/components/MobileOverlay'
+import { Loader2, LogIn, LogOut, User, Moon, Sun, RotateCcw, Filter, Edit3, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function Home() {
   const { user: authUser, accessToken, isLoading: authLoading, signOut } = useAuth()
@@ -23,6 +25,11 @@ export default function Home() {
     isLoadingLists,
     animeLists,
     mangaLists,
+    filters,
+    selectedEntries,
+    bulkEditMode,
+    leftSidebarOpen,
+    rightSidebarOpen,
     setUser,
     setAccessToken,
     setAnimeLists,
@@ -33,10 +40,29 @@ export default function Home() {
     toggleDarkMode,
     setLastDataLoad,
     shouldReloadData,
+    toggleLeftSidebar,
+    toggleRightSidebar,
+    setLeftSidebarOpen,
+    setRightSidebarOpen,
+    setBulkEditMode,
   } = useStore()
 
   const [client, setClient] = useState<AniListClient | null>(null)
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
+  const [mobileBulkEditOpen, setMobileBulkEditOpen] = useState(false)
+
+  const activeFilterCount = [
+    filters.status?.length ? 1 : 0,
+    filters.format?.length ? 1 : 0,
+    filters.genre?.length ? 1 : 0,
+    filters.country?.length ? 1 : 0,
+    filters.year?.start || filters.year?.end ? 1 : 0,
+    filters.score?.min || filters.score?.max ? 1 : 0,
+    filters.search ? 1 : 0,
+  ].reduce((a, b) => a + b, 0)
+
+  const selectedCount = selectedEntries.size
 
   // Manual refresh function
   const handleManualRefresh = async () => {
@@ -150,19 +176,25 @@ export default function Home() {
     return <TokenLogin />
   }
 
+  const handleSignOut = () => {
+    if (confirm('Are you sure you want to sign out?')) {
+      signOut()
+    }
+  }
+
   return (
     <Layout>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+          <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-              <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
                   AniList Bulk Edit
                 </h1>
                 {user && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                     <Image
                       src={user.avatar?.medium || '/default-avatar.png'}
                       alt={user.name}
@@ -176,7 +208,7 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <button
                   onClick={handleManualRefresh}
                   disabled={isManualRefreshing || isLoadingLists}
@@ -197,12 +229,8 @@ export default function Home() {
                 </button>
 
                 <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to sign out?')) {
-                      signOut()
-                    }
-                  }}
-                  className="btn-secondary text-sm flex items-center gap-2"
+                  onClick={handleSignOut}
+                  className="hidden sm:flex btn-secondary text-sm items-center gap-2"
                   title="Sign out of AniList"
                 >
                   <LogOut className="w-4 h-4" />
@@ -213,15 +241,62 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Main Content with Sidebar Layout */}
-        <div className="flex relative z-0">
-          {/* Left Sidebar */}
-          <div className="relative z-10">
-            <LeftSidebar />
+        {/* Main Content with Sidebars */}
+        <div className="relative">
+          {/* Left Sidebar - Desktop */}
+          <div
+            className={`sidebar-left hidden md:block ${leftSidebarOpen ? 'open' : 'closed'}`}
+          >
+            <LeftSidebar onClose={toggleLeftSidebar} isOpen={leftSidebarOpen} />
           </div>
 
+          {/* Left Edge Handle - Visible when sidebar is closed */}
+          {!leftSidebarOpen && (
+            <button
+              onClick={toggleLeftSidebar}
+              className="fixed left-0 top-1/2 -translate-y-1/2 z-50 hidden md:flex w-6 h-12 items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-r-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110"
+              aria-label="Open filters"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Right Sidebar - Desktop */}
+          <div
+            className={`sidebar-right hidden md:block ${rightSidebarOpen ? 'open' : 'closed'}`}
+          >
+            <BulkEditPanel client={client} onClose={toggleRightSidebar} isOpen={rightSidebarOpen} />
+          </div>
+
+          {/* Right Edge Handle - Visible when sidebar is closed */}
+          {!rightSidebarOpen && (
+            <button
+              onClick={toggleRightSidebar}
+              className="fixed right-0 top-1/2 -translate-y-1/2 z-50 hidden md:flex w-6 h-12 items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-l-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110"
+              aria-label="Open bulk edit"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Main Content Area */}
-          <main className="flex-1 overflow-auto relative z-0">
+          <main
+            className="min-h-[calc(100vh-4rem)] transition-all duration-300"
+            style={{
+              marginLeft: leftSidebarOpen ? '320px' : '0',
+              marginRight: rightSidebarOpen ? '640px' : '0',
+            }}
+          >
+            <div className="hidden md:block">
+              <style jsx>{`
+                @media (max-width: 767px) {
+                  main {
+                    margin-left: 0 !important;
+                    margin-right: 0 !important;
+                  }
+                }
+              `}</style>
+            </div>
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
               {isLoadingLists ? (
                 <div className="text-center py-12">
@@ -230,7 +305,6 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Show debug info when no lists are loaded */}
                   {(animeLists.length === 0 && mangaLists.length === 0) && (
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
                       <h3 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
@@ -240,8 +314,8 @@ export default function Home() {
                         Your anime and manga lists appear to be empty. This could mean:
                       </p>
                       <ul className="text-sm text-yellow-600 dark:text-yellow-300 space-y-1 mb-3 ml-4">
-                        <li>• You haven't added any anime or manga to your AniList yet</li>
-                        <li>• There's a connection issue preventing data loading</li>
+                        <li>• You haven&apos;t added any anime or manga to your AniList yet</li>
+                        <li>• There&apos;s a connection issue preventing data loading</li>
                         <li>• Your AniList privacy settings might be blocking access</li>
                       </ul>
                       <button
@@ -255,12 +329,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Debug Panel (uncomment for debugging)
-                                    <DebugPanel /> */}
-
-                  {/* Bulk Edit Panel */}
-                  <BulkEditPanel client={client} />
-
                   {/* Media List View */}
                   <MediaListView client={client} />
                 </div>
@@ -268,6 +336,34 @@ export default function Home() {
             </div>
           </main>
         </div>
+
+        {/* Mobile FAB */}
+        <MobileFAB
+          onFilterClick={() => setMobileFilterOpen(true)}
+          onBulkEditClick={() => setMobileBulkEditOpen(true)}
+          activeFilterCount={activeFilterCount}
+          selectedCount={selectedCount}
+          onSignOut={handleSignOut}
+          userName={user?.name}
+        />
+
+        {/* Mobile Filter Overlay */}
+        <MobileOverlay
+          isOpen={mobileFilterOpen}
+          onClose={() => setMobileFilterOpen(false)}
+          title="Filters"
+        >
+          <LeftSidebar isMobile onClose={() => setMobileFilterOpen(false)} />
+        </MobileOverlay>
+
+        {/* Mobile Bulk Edit Overlay */}
+        <MobileOverlay
+          isOpen={mobileBulkEditOpen}
+          onClose={() => setMobileBulkEditOpen(false)}
+          title="Bulk Edit"
+        >
+          <BulkEditPanel client={client} isMobile onClose={() => setMobileBulkEditOpen(false)} />
+        </MobileOverlay>
 
         {/* Notifications */}
         <NotificationList />

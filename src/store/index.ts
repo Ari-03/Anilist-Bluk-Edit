@@ -82,6 +82,11 @@ interface AppState {
         timestamp: number
     }>
 
+    // Sidebar state
+    leftSidebarOpen: boolean
+    rightSidebarOpen: boolean
+    mobileMenuOpen: boolean
+
     // Theme
     darkMode: boolean
 }
@@ -127,6 +132,13 @@ interface AppActions {
     removeNotification: (id: string) => void
     clearNotifications: () => void
     toggleDarkMode: () => void
+
+    // Sidebar actions
+    setLeftSidebarOpen: (open: boolean) => void
+    setRightSidebarOpen: (open: boolean) => void
+    toggleLeftSidebar: () => void
+    toggleRightSidebar: () => void
+    setMobileMenuOpen: (open: boolean) => void
 
     // Utility actions
     getCurrentLists: () => MediaList[]
@@ -208,6 +220,9 @@ const initialState: AppState = {
     isLoading: false,
     error: null,
     notifications: [],
+    leftSidebarOpen: true,
+    rightSidebarOpen: true,
+    mobileMenuOpen: false,
     darkMode: false,
 }
 
@@ -728,6 +743,12 @@ export const useStore = create<AppState & AppActions>()(
                 clearNotifications: () => set({ notifications: [] }),
                 toggleDarkMode: () => set(state => ({ darkMode: !state.darkMode })),
 
+                setLeftSidebarOpen: (leftSidebarOpen) => set({ leftSidebarOpen }),
+                setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
+                toggleLeftSidebar: () => set(state => ({ leftSidebarOpen: !state.leftSidebarOpen })),
+                toggleRightSidebar: () => set(state => ({ rightSidebarOpen: !state.rightSidebarOpen })),
+                setMobileMenuOpen: (mobileMenuOpen) => set({ mobileMenuOpen }),
+
                 // Utility actions
                 getCurrentLists: () => {
                     const state = get()
@@ -744,14 +765,14 @@ export const useStore = create<AppState & AppActions>()(
             {
                 name: 'anilist-bulk-edit-store',
                 partialize: (state) => ({
-                    // Only persist essential data to avoid quota exceeded errors
                     user: state.user,
                     accessToken: state.accessToken,
                     darkMode: state.darkMode,
                     currentType: state.currentType,
                     filters: state.filters,
                     lastDataLoad: state.lastDataLoad,
-                    // Don't persist large arrays to avoid localStorage quota issues
+                    leftSidebarOpen: state.leftSidebarOpen,
+                    rightSidebarOpen: state.rightSidebarOpen,
                 }),
             }
         ),
