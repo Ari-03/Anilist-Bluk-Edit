@@ -3,6 +3,11 @@ node_modules/
 
 # Next
 .next/
+tsconfig.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+.lighthouseci/
 
 # Environment
 .env

@@ -1,159 +1,84 @@
-import React, { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { GetServerSideProps } from 'next'
+import Head from 'next/head'
 import { useRouter } from 'next/router'
-import { useAuth } from '@/contexts/AuthContext'
-import { Loader2, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
+import { CheckCircle, LoaderCircle, XCircle } from 'lucide-react'
 
-const AuthCallback: React.FC = () => {
+import { useApp } from '@/contexts/AppContext'
+import { captureAndClearOAuthFragment } from '@/modules/accounts'
+
+let capturedFragment =
+  typeof window === 'undefined'
+    ? ''
+    : captureAndClearOAuthFragment(window.location, window.history)
+
+export default function AuthCallback() {
+  const fragmentRef = useRef(capturedFragment)
   const router = useRouter()
-  const { signInWithToken } = useAuth()
-  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing')
-  const [error, setError] = useState<string>('')
-  const processingRef = useRef(false)
+  const { status: appStatus, startupError, completeLink } = useApp()
+  const started = useRef(false)
+  const [state, setState] = useState<'processing' | 'success' | 'error'>('processing')
+  const [message, setMessage] = useState('Validating this AniList account…')
+  const immediateError =
+    appStatus === 'error'
+      ? (startupError ?? 'Local account storage could not be opened.')
+      : null
+  const renderedState = immediateError ? 'error' : state
+  const renderedMessage = immediateError ?? message
 
   useEffect(() => {
-    let isMounted = true // React Strict Mode protection
+    if (started.current || appStatus === 'booting') return
+    started.current = true
 
-    const handleCallback = async () => {
-      // Prevent duplicate processing (race condition and Strict Mode protection)
-      if (processingRef.current) {
-        console.log('OAuth callback already processing, skipping')
-        return
-      }
-      
-      processingRef.current = true
-
-      try {
-        // Extract access token from URL fragment
-        const fragment = window.location.hash.substring(1)
-        console.log('OAuth callback fragment:', fragment)
-        
-        const params = new URLSearchParams(fragment)
-        const accessToken = params.get('access_token')
-        const error = params.get('error')
-        const errorDescription = params.get('error_description')
-        const tokenType = params.get('token_type')
-        const expiresIn = params.get('expires_in')
-
-        console.log('OAuth callback params:', {
-          accessToken: accessToken ? accessToken.substring(0, 10) + '...' : null,
-          error,
-          errorDescription,
-          tokenType,
-          expiresIn
-        })
-
-        if (error) {
-          if (isMounted) {
-            setStatus('error')
-            setError(errorDescription || error || 'Authorization failed')
-          }
-          return
-        }
-
-        if (!accessToken) {
-          if (isMounted) {
-            setStatus('error')
-            setError('No access token received from AniList')
-          }
-          return
-        }
-
-        console.log('Token format check:', {
-          length: accessToken.length,
-          startsCorrectly: accessToken.length > 10,
-          type: typeof accessToken
-        })
-
-        // Use the new secure sign-in method
-        const result = await signInWithToken(accessToken)
-        
-        if (!isMounted) return // Component unmounted during async operation
-        
-        if (result.success) {
-          setStatus('success')
-          // Clear the URL fragment to prevent re-processing
-          window.history.replaceState(null, '', window.location.pathname)
-          // Redirect to main app after a brief success message
-          setTimeout(() => {
-            if (isMounted) {
-              router.push('/')
-            }
-          }, 1500)
-        } else {
-          setStatus('error')
-          setError(result.error || 'Failed to authenticate with AniList')
-        }
-      } catch (err) {
-        console.error('Callback error:', err)
-        if (isMounted) {
-          setStatus('error')
-          setError('An unexpected error occurred during authentication')
-        }
-      }
+    const fragment = fragmentRef.current
+    capturedFragment = ''
+    fragmentRef.current = ''
+    if (appStatus === 'error') return
+    if (!fragment) {
+      setState('error')
+      setMessage('The AniList callback did not include authorization details.')
+      return
     }
-
-    handleCallback()
-
-    // Cleanup function for React Strict Mode
-    return () => {
-      isMounted = false
-      // Reset processing flag if component unmounts during processing
-      processingRef.current = false
-    }
-  }, [router, signInWithToken])
-
-  const handleRetry = () => {
-    router.push('/login')
-  }
+    void completeLink(fragment)
+      .then(() => {
+        setState('success')
+        setMessage('Account linked. Returning to your list…')
+        return router.replace('/')
+      })
+      .catch((error: unknown) => {
+        setState('error')
+        setMessage(error instanceof Error ? error.message : 'AniList authorization failed.')
+      })
+  }, [appStatus, completeLink, router, startupError])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 text-center">
-        {status === 'processing' && (
-          <>
-            <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Authenticating...
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Processing your AniList authentication
-            </p>
-          </>
-        )}
-
-        {status === 'success' && (
-          <>
-            <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Authentication Successful!
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Redirecting to the application...
-            </p>
-          </>
-        )}
-
-        {status === 'error' && (
-          <>
-            <XCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Authentication Failed
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {error}
-            </p>
-            <button
-              onClick={handleRetry}
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Login
+    <>
+      <Head>
+        <title>Linking account · AniList Bulk Edit</title>
+        <meta name="robots" content="noindex" />
+      </Head>
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
+        <section className="panel w-full max-w-md p-8 text-center" aria-live="polite">
+          {renderedState === 'processing' ? (
+            <LoaderCircle className="mx-auto h-12 w-12 animate-spin text-sky-500 motion-reduce:animate-none" aria-hidden="true" />
+          ) : renderedState === 'success' ? (
+            <CheckCircle className="mx-auto h-12 w-12 text-emerald-600" aria-hidden="true" />
+          ) : (
+            <XCircle className="mx-auto h-12 w-12 text-red-600" aria-hidden="true" />
+          )}
+          <h1 className="mt-5 text-xl font-bold">
+            {renderedState === 'error' ? 'Could not link account' : 'Linking AniList account'}
+          </h1>
+          <p className="mt-2 text-slate-600 dark:text-slate-300">{renderedMessage}</p>
+          {renderedState === 'error' ? (
+            <button className="btn-primary mt-6 w-full" onClick={() => void router.replace('/')}>
+              Return to AniList Bulk Edit
             </button>
-          </>
-        )}
-      </div>
-    </div>
+          ) : null}
+        </section>
+      </main>
+    </>
   )
 }
 
-export default AuthCallback
+export const getServerSideProps: GetServerSideProps = async () => ({ props: {} })

@@ -2,239 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar */
+:root {
+  color-scheme: light;
+  --anilist-blue: #3db4f2;
+  --anilist-blue-strong: #168bc5;
+}
+
+:root.dark {
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    @apply scroll-smooth bg-slate-50 antialiased dark:bg-slate-950;
+  }
+
+  body {
+    @apply min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  summary,
+  [tabindex]:not([tabindex='-1']) {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-950;
+  }
+
+  button,
+  select,
+  input[type='checkbox'] {
+    @apply min-h-11;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-2 font-semibold text-white transition-colors hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-800 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800;
+  }
+
+  .btn-danger {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .field {
+    @apply min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 hover:border-slate-400 focus:border-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-600;
+  }
+
+  .panel {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+  }
+
+  .subtle-label {
+    @apply text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400;
+  }
+
+  .workspace-shell {
+    --workspace-header-height: 4rem;
+  }
+
+  .bulk-selection-actions {
+    top: calc(var(--workspace-header-height) + 0.5rem);
+  }
+
+  @media (max-width: 639px) {
+    .bulk-selection-actions {
+      /* Safety floor while a resize observer catches a newly wrapped header. */
+      top: max(calc(var(--workspace-header-height) + 0.5rem), 10.75rem);
+    }
+  }
+}
+
+dialog::backdrop {
+  background: rgb(15 23 42 / 0.68);
+  backdrop-filter: blur(3px);
+}
+
 ::-webkit-scrollbar {
-    width: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
+  @apply bg-slate-100 dark:bg-slate-900;
 }
 
 ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+  @apply rounded-full bg-slate-300 dark:bg-slate-700;
 }
 
-::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-400 dark:bg-gray-500;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
-
-/* Custom animations */
-@keyframes fadeIn {
-    from {
-        opacity: 0.3;
-        transform: translateY(6px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.animate-fadeIn {
-    animation: fadeIn 0.2s ease-out forwards;
-}
-
-@keyframes fadeOut {
-    from {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-
-    to {
-        opacity: 0;
-        transform: translateY(-6px) scale(0.96);
-    }
-}
-
-.animate-fadeOut {
-    animation: fadeOut 0.15s ease-in forwards;
-}
-
-@keyframes slideUp {
-    from {
-        transform: translateY(10px);
-        opacity: 0;
-    }
-
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-/* Loading spinner */
-.loading-spinner {
-    border: 3px solid rgba(59, 130, 246, 0.1);
-    border-left: 3px solid #3b82f6;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-/* AniList theme colors */
-.anilist-blue {
-    background: linear-gradient(135deg, #3DB4F2 0%, #2E86C1 100%);
-}
-
-/* Dark mode styles */
-.dark {
-    color-scheme: dark;
-}
-
-/* Media card hover effects */
-.media-card {
-    transition: all 0.3s ease;
-}
-
-.media-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-}
-
-/* Checkbox custom styles */
-.checkbox {
-    @apply w-5 h-5 rounded border-2 border-gray-300 dark:border-gray-600 checked:bg-anilist-blue checked:border-anilist-blue focus:ring-2 focus:ring-anilist-blue focus:ring-opacity-50;
-}
-
-/* Button variants */
-.btn-primary {
-    @apply bg-anilist-blue text-white font-medium py-2 px-4 rounded-lg hover:bg-opacity-90 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-anilist-blue focus:ring-opacity-50;
-}
-
-.btn-secondary {
-    @apply bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-medium py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50;
-}
-
-.btn-danger {
-    @apply bg-red-500 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50;
-}
-
-/* Input styles */
-.input {
-    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-anilist-blue focus:border-transparent;
-}
-
-/* Select styles */
-.select {
-    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-anilist-blue focus:border-transparent appearance-none;
-}
-
-/* Card styles */
-.card {
-    @apply bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700;
-}
-
-/* Status badges */
-.status-current {
-    @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
-}
-
-.status-planning {
-    @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
-}
-
-.status-completed {
-    @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200;
-}
-
-.status-dropped {
-    @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
-}
-
-.status-paused {
-    @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
-}
-
-.status-repeating {
-    @apply bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200;
-}
-
-/* Notification animations */
-@keyframes slide-in-right {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-.animate-slide-in-right {
-    animation: slide-in-right 0.3s ease-out;
-}
-
-/* Dual Range Slider Styles */
-.slider {
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    cursor: pointer;
-    pointer-events: auto;
-    height: 8px; /* Reduced height since no thumbs */
-}
-
-/* Webkit Styles */
-.slider::-webkit-slider-track {
-    background: transparent;
-    height: 8px;
-    border-radius: 4px;
-}
-
-.slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    height: 0;
-    width: 0;
-    cursor: pointer;
-    box-shadow: none;
-    margin-top: 0;
-    /* Hide the thumb completely */
-}
-
-.slider::-webkit-slider-thumb:hover {
-    background: transparent;
-    transform: none;
-}
-
-/* Firefox Styles */
-.slider::-moz-range-track {
-    background: transparent;
-    height: 8px;
-    border-radius: 4px;
-    border: none;
-}
-
-.slider::-moz-range-thumb {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    height: 0;
-    width: 0;
-    cursor: pointer;
-    box-shadow: none;
-    /* Hide the thumb completely */
-}
-
-.slider::-moz-range-thumb:hover {
-    background: transparent;
-    transform: none;
-}
-
-/* Remove dark mode thumb styles since thumbs are hidden */
