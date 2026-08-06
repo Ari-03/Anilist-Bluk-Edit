@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { serialize } from 'cookie'
+import { VIEWER_QUERY, pickSessionUser } from '@/lib/viewerQuery'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -14,7 +15,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Log the token for debugging (first few characters only)
-    console.log('Validating token:', token.substring(0, 10) + '...')
     
     // Retry logic with exponential backoff
     const maxRetries = 3
@@ -23,7 +23,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     while (retryCount <= maxRetries) {
       try {
-        console.log(`Attempt ${retryCount + 1}/${maxRetries + 1} - Validating token with AniList API`)
         
         // Create AbortController for timeout
         const controller = new AbortController()
@@ -38,58 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            query: `
-              query {
-                Viewer {
-                  id
-                  name
-                  avatar {
-                    large
-                    medium
-                  }
-                  bannerImage
-                  about
-                  options {
-                    titleLanguage
-                    displayAdultContent
-                    airingNotifications
-                    profileColor
-                  }
-                  mediaListOptions {
-                    scoreFormat
-                    rowOrder
-                    animeList {
-                      sectionOrder
-                      splitCompletedSectionByFormat
-                      customLists
-                      advancedScoring
-                      advancedScoringEnabled
-                    }
-                    mangaList {
-                      sectionOrder
-                      splitCompletedSectionByFormat
-                      customLists
-                      advancedScoring
-                      advancedScoringEnabled
-                    }
-                  }
-                  statistics {
-                    anime {
-                      count
-                      meanScore
-                      minutesWatched
-                      episodesWatched
-                    }
-                    manga {
-                      count
-                      meanScore
-                      chaptersRead
-                      volumesRead
-                    }
-                  }
-                }
-              }
-            `,
+            query: VIEWER_QUERY,
           }),
           signal: controller.signal
         })
@@ -118,7 +66,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         
         // Exponential backoff: wait 1s, 2s, 4s between retries
         const delay = Math.pow(2, retryCount - 1) * 1000
-        console.log(`Waiting ${delay}ms before retry...`)
         await new Promise(resolve => setTimeout(resolve, delay))
       }
     }
@@ -130,9 +77,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         details: 'All connection attempts failed'
       })
     }
-
-    console.log('AniList API response status:', response.status, response.statusText)
-    console.log('AniList API response headers:', Object.fromEntries(response.headers.entries()))
 
     // Check if response is successful
     if (!response.ok) {
@@ -166,7 +110,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const data = await response.json()
-    console.log('AniList API response data:', data.data ? 'Success' : 'No data', data.errors ? 'Has errors' : 'No errors')
 
     if (data.errors) {
       console.error('AniList GraphQL errors:', data.errors)
@@ -185,16 +128,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     expiresAt.setFullYear(expiresAt.getFullYear() + 1)
 
     const sessionData = {
-      user: {
-        id: user.id,
-        name: user.name,
-        avatar: user.avatar,
-        bannerImage: user.bannerImage,
-        about: user.about,
-        options: user.options,
-        mediaListOptions: user.mediaListOptions,
-        statistics: user.statistics,
-      },
+      user: pickSessionUser(user),
       accessToken: token,
       expiresAt: expiresAt.toISOString()
     }

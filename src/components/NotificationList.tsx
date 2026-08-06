@@ -1,76 +1,94 @@
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, m } from 'framer-motion'
 import { useStore } from '@/store'
-import {
-    CheckCircle,
-    XCircle,
-    AlertTriangle,
-    Info,
-    X
-} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react'
 
-export default function NotificationList() {
-    const { notifications, removeNotification } = useStore()
+const AUTO_DISMISS_MS = 5000
+const MAX_VISIBLE = 4
 
-    if (notifications.length === 0) return null
+const STYLES: Record<string, { icon: typeof Info; accent: string; iconColor: string }> = {
+    success: { icon: CheckCircle, accent: 'border-l-success', iconColor: 'text-success' },
+    error: { icon: XCircle, accent: 'border-l-danger', iconColor: 'text-danger' },
+    warning: { icon: AlertTriangle, accent: 'border-l-warning', iconColor: 'text-warning' },
+    info: { icon: Info, accent: 'border-l-accent', iconColor: 'text-accent' },
+}
 
-    const getIcon = (type: string) => {
-        switch (type) {
-            case 'success':
-                return <CheckCircle className="w-5 h-5 text-green-500" />
-            case 'error':
-                return <XCircle className="w-5 h-5 text-red-500" />
-            case 'warning':
-                return <AlertTriangle className="w-5 h-5 text-yellow-500" />
-            case 'info':
-                return <Info className="w-5 h-5 text-blue-500" />
-            default:
-                return <Info className="w-5 h-5 text-gray-500" />
+interface ToastProps {
+    id: string
+    type: string
+    message: string
+    onDismiss: () => void
+}
+
+function Toast({ type, message, onDismiss }: ToastProps) {
+    const [hovered, setHovered] = useState(false)
+    const remainingRef = useRef(AUTO_DISMISS_MS)
+    const startedAtRef = useRef(Date.now())
+    // Latest-ref so the timer effect keys ONLY on hover — a fresh onDismiss
+    // closure per parent render must not restart the countdown
+    const onDismissRef = useRef(onDismiss)
+    onDismissRef.current = onDismiss
+
+    // Auto-dismiss with hover-to-pause: the timer only runs while not hovered
+    useEffect(() => {
+        if (hovered) {
+            remainingRef.current -= Date.now() - startedAtRef.current
+            return
         }
-    }
+        startedAtRef.current = Date.now()
+        const timer = setTimeout(() => onDismissRef.current(), Math.max(0, remainingRef.current))
+        return () => clearTimeout(timer)
+    }, [hovered])
 
-    const getColor = (type: string) => {
-        switch (type) {
-            case 'success':
-                return 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200'
-            case 'error':
-                return 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
-            case 'warning':
-                return 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-200'
-            case 'info':
-                return 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200'
-            default:
-                return 'bg-gray-50 border-gray-200 text-gray-800 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200'
-        }
-    }
+    const style = STYLES[type] ?? STYLES.info
+    const Icon = style.icon
 
     return (
-        <div className="fixed top-4 right-4 z-50 space-y-2 w-96 max-w-[calc(100vw-2rem)]">
-            {notifications.map((notification) => (
-                <div
-                    key={notification.id}
-                    className={`
-            ${getColor(notification.type)}
-            border rounded-lg p-4 shadow-lg
-            transform transition-all duration-300 ease-in-out
-            animate-slide-in-right
-          `}
+        <m.div
+            layout
+            initial={{ opacity: 0, x: 48, scale: 0.98 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 24, scale: 0.96, transition: { duration: 0.15 } }}
+            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+            className={cn('card border-l-4 p-3.5 shadow-raised', style.accent)}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+        >
+            <div className="flex items-start gap-2.5">
+                <Icon className={cn('w-[18px] h-[18px] flex-shrink-0 mt-px', style.iconColor)} />
+                <p className="flex-1 min-w-0 text-sm text-fg break-words">{message}</p>
+                <button
+                    onClick={onDismiss}
+                    className="flex-shrink-0 p-0.5 rounded text-fg-subtle hover:text-fg hover:bg-raised transition-colors"
+                    aria-label="Dismiss notification"
                 >
-                    <div className="flex items-start gap-3">
-                        {getIcon(notification.type)}
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium break-words">
-                                {notification.message}
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => removeNotification(notification.id)}
-                            className="flex-shrink-0 p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
-                            aria-label="Dismiss notification"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
+                    <X className="w-3.5 h-3.5" />
+                </button>
+            </div>
+        </m.div>
+    )
+}
+
+export default function NotificationList() {
+    const notifications = useStore(s => s.notifications)
+    const removeNotification = useStore(s => s.removeNotification)
+    const visible = notifications.slice(-MAX_VISIBLE)
+
+    return (
+        <div className="fixed top-4 right-4 z-notification space-y-2 w-80 max-w-[calc(100vw-2rem)] pointer-events-none">
+            <AnimatePresence initial={false}>
+                {visible.map(n => (
+                    <div key={n.id} className="pointer-events-auto">
+                        <Toast
+                            id={n.id}
+                            type={n.type}
+                            message={n.message}
+                            onDismiss={() => removeNotification(n.id)}
+                        />
                     </div>
-                </div>
-            ))}
+                ))}
+            </AnimatePresence>
         </div>
     )
-} 
+}

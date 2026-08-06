@@ -42,10 +42,20 @@ interface SortedIndices {
     byScore: number[] // indices sorted by score
 }
 
+export interface StoredAccount {
+    user: User
+    accessToken: string
+    addedAt: number
+}
+
 interface AppState {
     // User data
     user: User | null
     accessToken: string | null
+
+    // Multi-account registry; `user`/`accessToken` mirror the active account
+    accounts: Record<number, StoredAccount>
+    activeAccountId: number | null
 
     // Media lists
     animeLists: MediaList[]
@@ -61,11 +71,16 @@ interface AppState {
     currentType: MediaType
     currentStatus: MediaListStatus | 'ALL'
     viewMode: 'grid' | 'list'
+    // Collapsed accordion status sections, per media type
+    collapsedStatusSections: Record<MediaType, MediaListStatus[]>
 
     // Bulk edit
     selectedEntries: Set<number>
     bulkEditMode: boolean
     bulkEditOptions: BulkEditOptions | null
+
+    // Per-entry mutation sync state (transient, not persisted)
+    entrySync: Record<number, 'pending' | 'error'>
 
     // Filters and search
     filters: FilterOptions
@@ -90,13 +105,18 @@ interface AppActions {
     // User actions
     setUser: (user: User | null) => void
     setAccessToken: (token: string | null) => void
+    refreshUser: () => Promise<void>
+    upsertAccount: (user: User, accessToken: string) => void
+    removeAccount: (id: number) => void
     logout: () => void
 
     // Media list actions
     setAnimeLists: (lists: MediaList[]) => void
     setMangaLists: (lists: MediaList[]) => void
     updateMediaListEntry: (entry: MediaList) => void
+    mergeMediaListEntries: (partials: Array<Partial<MediaList> & { id: number }>) => void
     removeMediaListEntry: (id: number) => void
+    removeMediaListEntries: (ids: number[]) => void
     setIsLoadingLists: (loading: boolean) => void
     setLastDataLoad: (timestamp: number) => void
     shouldReloadData: () => boolean
@@ -106,13 +126,18 @@ interface AppActions {
     setCurrentType: (type: MediaType) => void
     setCurrentStatus: (status: MediaListStatus | 'ALL') => void
     setViewMode: (mode: 'grid' | 'list') => void
+    toggleStatusSection: (type: MediaType, status: MediaListStatus) => void
 
     // Bulk edit actions
     toggleEntrySelection: (entryId: number) => void
+    selectEntries: (ids: number[]) => void
     selectAllEntries: () => void
     clearSelection: () => void
+    deselectEntries: (ids: number[]) => void
     setBulkEditMode: (enabled: boolean) => void
     setBulkEditOptions: (options: BulkEditOptions | null) => void
+    setEntrySync: (ids: number[], syncState: 'pending' | 'error' | null) => void
+    clearEntrySync: () => void
 
     // Filter actions
     setFilters: (filters: Partial<FilterOptions>) => void
@@ -187,6 +212,8 @@ const createSortedIndices = (lists: MediaList[]): SortedIndices => {
 const initialState: AppState = {
     user: null,
     accessToken: null,
+    accounts: {},
+    activeAccountId: null,
     animeLists: [],
     mangaLists: [],
     isLoadingLists: false,
@@ -196,9 +223,14 @@ const initialState: AppState = {
     currentType: MediaType.ANIME,
     currentStatus: 'ALL',
     viewMode: 'grid',
+    collapsedStatusSections: {
+        [MediaType.ANIME]: [],
+        [MediaType.MANGA]: [],
+    },
     selectedEntries: new Set(),
     bulkEditMode: false,
     bulkEditOptions: null,
+    entrySync: {},
     filters: {
         sortBy: 'title',
         sortOrder: 'asc'
@@ -208,7 +240,7 @@ const initialState: AppState = {
     isLoading: false,
     error: null,
     notifications: [],
-    darkMode: false,
+    darkMode: true, // dark-first; persisted preference wins for returning users
 }
 
 export const useStore = create<AppState & AppActions>()(
@@ -220,21 +252,79 @@ export const useStore = create<AppState & AppActions>()(
                 // User actions
                 setUser: (user) => set({ user }),
                 setAccessToken: (accessToken) => set({ accessToken }),
+                // Re-fetch the viewer profile (incl. custom list names) so lists
+                // created on anilist.co after sign-in show up without a re-login
+                refreshUser: async () => {
+                    const { accessToken } = get()
+                    if (!accessToken) return
+                    try {
+                        const client = new (require('@/lib/anilist').AniListClient)(accessToken)
+                        const user = await client.getCurrentUser()
+                        if (user) set({ user })
+                    } catch (error) {
+                        console.error('Failed to refresh user profile:', error)
+                        get().addNotification({
+                            type: 'error',
+                            message: 'Could not refresh your profile from AniList'
+                        })
+                    }
+                },
+                // Register (or refresh) an account and make it active. Switching
+                // accounts clears all per-account data so nothing bleeds through.
+                upsertAccount: (user, accessToken) => {
+                    const state = get()
+                    const switching = state.activeAccountId !== null && state.activeAccountId !== user.id
+                    set({
+                        accounts: {
+                            ...state.accounts,
+                            [user.id]: {
+                                user,
+                                accessToken,
+                                addedAt: state.accounts[user.id]?.addedAt ?? Date.now()
+                            }
+                        },
+                        activeAccountId: user.id,
+                        user,
+                        accessToken,
+                        ...(switching ? {
+                            animeLists: [],
+                            mangaLists: [],
+                            filteredEntries: [],
+                            selectedEntries: new Set<number>(),
+                            lastDataLoad: null,
+                            animeSortedIndices: null,
+                            mangaSortedIndices: null,
+                            bulkEditMode: false,
+                            bulkEditOptions: null,
+                            entrySync: {},
+                        } : {})
+                    })
+                    if (switching) get().applyFilters()
+                },
+                removeAccount: (id) => {
+                    set(state => {
+                        const accounts = { ...state.accounts }
+                        delete accounts[id]
+                        return { accounts }
+                    })
+                },
                 logout: () => set({
                     user: null,
                     accessToken: null,
+                    accounts: {},
+                    activeAccountId: null,
                     animeLists: [],
                     mangaLists: [],
                     lastDataLoad: null,
                     selectedEntries: new Set(),
                     bulkEditMode: false,
                     bulkEditOptions: null,
+                    entrySync: {},
                     filteredEntries: [] // Reset filtered entries
                 }),
 
                 // Media list actions
                 setAnimeLists: (animeLists) => {
-                    console.log('Setting anime lists:', animeLists.length, 'entries')
 
                     // De-duplicate lists before storing to prevent issues
                     const uniqueMap = new Map<number, MediaList>()
@@ -246,7 +336,6 @@ export const useStore = create<AppState & AppActions>()(
                     const uniqueAnimeLists = Array.from(uniqueMap.values())
 
                     if (uniqueAnimeLists.length < animeLists.length) {
-                        console.warn(`Removed ${animeLists.length - uniqueAnimeLists.length} duplicate anime entries`)
                     }
 
                     // Create sorted indices for performance optimization
@@ -257,7 +346,6 @@ export const useStore = create<AppState & AppActions>()(
                     get().applyFilters()
                 },
                 setMangaLists: (mangaLists) => {
-                    console.log('Setting manga lists:', mangaLists.length, 'entries')
 
                     // De-duplicate lists before storing
                     const uniqueMap = new Map<number, MediaList>()
@@ -269,7 +357,6 @@ export const useStore = create<AppState & AppActions>()(
                     const uniqueMangaLists = Array.from(uniqueMap.values())
 
                     if (uniqueMangaLists.length < mangaLists.length) {
-                        console.warn(`Removed ${mangaLists.length - uniqueMangaLists.length} duplicate manga entries`)
                     }
 
                     // Create sorted indices for performance optimization
@@ -280,36 +367,59 @@ export const useStore = create<AppState & AppActions>()(
                     get().applyFilters()
                 },
                 updateMediaListEntry: (updatedEntry) => {
+                    get().mergeMediaListEntries([updatedEntry])
+                },
+                // Merge partial mutation results onto existing entries in one pass.
+                // Mutation responses are thin (no full media object), so the rich
+                // `media` already in the store is always preserved.
+                mergeMediaListEntries: (partials) => {
+                    if (partials.length === 0) return
                     const state = get()
-                    const isAnime = updatedEntry.media?.type === MediaType.ANIME
+                    const byId = new Map(partials.map(p => [p.id, p]))
 
-                    if (isAnime) {
-                        const animeLists = state.animeLists.map(entry =>
-                            entry.id === updatedEntry.id ? updatedEntry : entry
-                        )
-                        const animeSortedIndices = createSortedIndices(animeLists)
-                        set({ animeLists, animeSortedIndices })
-                    } else {
-                        const mangaLists = state.mangaLists.map(entry =>
-                            entry.id === updatedEntry.id ? updatedEntry : entry
-                        )
-                        const mangaSortedIndices = createSortedIndices(mangaLists)
-                        set({ mangaLists, mangaSortedIndices })
-                    }
+                    let animeChanged = false
+                    let mangaChanged = false
 
+                    const animeLists = state.animeLists.map(entry => {
+                        const partial = byId.get(entry.id)
+                        if (!partial) return entry
+                        animeChanged = true
+                        return { ...entry, ...partial, media: entry.media }
+                    })
+                    const mangaLists = state.mangaLists.map(entry => {
+                        const partial = byId.get(entry.id)
+                        if (!partial) return entry
+                        mangaChanged = true
+                        return { ...entry, ...partial, media: entry.media }
+                    })
+
+                    if (!animeChanged && !mangaChanged) return
+
+                    set({
+                        ...(animeChanged ? { animeLists, animeSortedIndices: createSortedIndices(animeLists) } : {}),
+                        ...(mangaChanged ? { mangaLists, mangaSortedIndices: createSortedIndices(mangaLists) } : {}),
+                    })
                     get().applyFilters()
                 },
                 removeMediaListEntry: (id) => {
+                    get().removeMediaListEntries([id])
+                },
+                removeMediaListEntries: (ids) => {
+                    if (ids.length === 0) return
+                    const idSet = new Set(ids)
                     const state = get()
-                    const animeLists = state.animeLists.filter(entry => entry.id !== id)
-                    const mangaLists = state.mangaLists.filter(entry => entry.id !== id)
+                    const animeLists = state.animeLists.filter(entry => !idSet.has(entry.id))
+                    const mangaLists = state.mangaLists.filter(entry => !idSet.has(entry.id))
                     const selectedEntries = new Set(state.selectedEntries)
-                    selectedEntries.delete(id)
+                    ids.forEach(id => selectedEntries.delete(id))
 
-                    const animeSortedIndices = createSortedIndices(animeLists)
-                    const mangaSortedIndices = createSortedIndices(mangaLists)
-
-                    set({ animeLists, mangaLists, selectedEntries, animeSortedIndices, mangaSortedIndices })
+                    set({
+                        animeLists,
+                        mangaLists,
+                        selectedEntries,
+                        animeSortedIndices: createSortedIndices(animeLists),
+                        mangaSortedIndices: createSortedIndices(mangaLists)
+                    })
                     get().applyFilters()
                 },
                 setIsLoadingLists: (isLoadingLists) => set({ isLoadingLists }),
@@ -323,31 +433,18 @@ export const useStore = create<AppState & AppActions>()(
                     if (hasDataInMemory && hasTimestamp) {
                         const fiveMinutes = 5 * 60 * 1000 // Reduced from 1 hour to 5 minutes for better UX
                         const isDataFresh = Date.now() - state.lastDataLoad! < fiveMinutes
-                        console.log('shouldReloadData check:', {
-                            hasDataInMemory,
-                            hasTimestamp,
-                            lastDataLoad: state.lastDataLoad,
-                            isDataFresh,
-                            timeSinceLoad: state.lastDataLoad ? Date.now() - state.lastDataLoad : 'never'
-                        })
                         return !isDataFresh
                     }
 
-                    console.log('shouldReloadData: true (no data or timestamp)', {
-                        hasDataInMemory,
-                        hasTimestamp
-                    })
                     return true
                 },
 
                 fetchMediaLists: async (userId, type, force = false) => {
                     const state = get()
                     if (!force && !state.shouldReloadData()) {
-                        console.log('Data is fresh, skipping reload.')
                         return
                     }
 
-                    console.log('Fetching media lists...', { userId, type, force, hasAccessToken: !!state.accessToken })
                     set({ isLoadingLists: true, error: null })
 
                     if (!state.accessToken) {
@@ -363,21 +460,17 @@ export const useStore = create<AppState & AppActions>()(
 
                     try {
                         const client = new (require('@/lib/anilist').AniListClient)(state.accessToken)
-                        console.log('Fetching anime and manga lists...')
                         
                         const [animeListsData, mangaListsData] = await Promise.all([
                             client.getAllMediaLists(userId, MediaType.ANIME),
                             client.getAllMediaLists(userId, MediaType.MANGA),
                         ])
 
-                        console.log('Data fetched successfully:', {
-                            animeCount: animeListsData.length,
-                            mangaCount: mangaListsData.length
-                        })
-
                         set({
                             animeLists: animeListsData,
                             mangaLists: mangaListsData,
+                            animeSortedIndices: createSortedIndices(animeListsData),
+                            mangaSortedIndices: createSortedIndices(mangaListsData),
                             lastDataLoad: Date.now(),
                             isLoadingLists: false,
                             error: null
@@ -385,11 +478,6 @@ export const useStore = create<AppState & AppActions>()(
 
                         // Apply filters after setting data
                         get().applyFilters()
-
-                        get().addNotification({
-                            type: 'success',
-                            message: `Successfully loaded ${animeListsData.length} anime and ${mangaListsData.length} manga entries.`,
-                        })
                     } catch (error: any) {
                         console.error('Failed to fetch media lists:', {
                             error: error.message,
@@ -424,7 +512,6 @@ export const useStore = create<AppState & AppActions>()(
 
                 // View actions
                 setCurrentType: (currentType) => {
-                    console.log('Setting current type to:', currentType)
                     set({
                         currentType,
                         selectedEntries: new Set(),
@@ -435,14 +522,26 @@ export const useStore = create<AppState & AppActions>()(
                     get().applyFilters()
                 },
                 setCurrentStatus: (currentStatus) => {
-                    console.log('Setting current status to:', currentStatus)
                     set({ currentStatus, selectedEntries: new Set() })
                     // Apply filters immediately after state update
                     get().applyFilters()
                 },
                 setViewMode: (viewMode) => {
-                    console.log('Setting view mode to:', viewMode)
                     set({ viewMode })
+                },
+                toggleStatusSection: (type, status) => {
+                    set(state => {
+                        const current = state.collapsedStatusSections[type] || []
+                        const collapsed = current.includes(status)
+                            ? current.filter(s => s !== status)
+                            : [...current, status]
+                        return {
+                            collapsedStatusSections: {
+                                ...state.collapsedStatusSections,
+                                [type]: collapsed,
+                            },
+                        }
+                    })
                 },
 
                 // Bulk edit actions
@@ -455,12 +554,24 @@ export const useStore = create<AppState & AppActions>()(
                     }
                     set({ selectedEntries })
                 },
+                selectEntries: (ids) => {
+                    if (ids.length === 0) return
+                    const selectedEntries = new Set(get().selectedEntries)
+                    ids.forEach(id => selectedEntries.add(id))
+                    set({ selectedEntries })
+                },
                 selectAllEntries: () => {
                     const filteredEntries = get().filteredEntries
                     const selectedEntries = new Set(filteredEntries.map(entry => entry.id))
                     set({ selectedEntries })
                 },
                 clearSelection: () => set({ selectedEntries: new Set() }),
+                deselectEntries: (ids) => {
+                    if (ids.length === 0) return
+                    const selectedEntries = new Set(get().selectedEntries)
+                    ids.forEach(id => selectedEntries.delete(id))
+                    set({ selectedEntries })
+                },
                 setBulkEditMode: (bulkEditMode) => {
                     set({ bulkEditMode })
                     if (!bulkEditMode) {
@@ -468,6 +579,21 @@ export const useStore = create<AppState & AppActions>()(
                     }
                 },
                 setBulkEditOptions: (bulkEditOptions) => set({ bulkEditOptions }),
+                setEntrySync: (ids, syncState) => {
+                    if (ids.length === 0) return
+                    set(state => {
+                        const entrySync = { ...state.entrySync }
+                        ids.forEach(id => {
+                            if (syncState === null) {
+                                delete entrySync[id]
+                            } else {
+                                entrySync[id] = syncState
+                            }
+                        })
+                        return { entrySync }
+                    })
+                },
+                clearEntrySync: () => set({ entrySync: {} }),
 
                 // Filter actions
                 setFilters: (newFilters) => {
@@ -711,14 +837,10 @@ export const useStore = create<AppState & AppActions>()(
                         id,
                         timestamp: Date.now()
                     }
+                    // Auto-dismiss lives in NotificationList so hover can pause it
                     set(state => ({
                         notifications: [...state.notifications, newNotification]
                     }))
-
-                    // Auto-remove notification after 5 seconds
-                    setTimeout(() => {
-                        get().removeNotification(id)
-                    }, 5000)
                 },
                 removeNotification: (id) => {
                     set(state => ({
@@ -743,14 +865,33 @@ export const useStore = create<AppState & AppActions>()(
             }),
             {
                 name: 'anilist-bulk-edit-store',
+                version: 1,
+                // v0 stored a single user+accessToken; fold it into the accounts
+                // registry so existing users stay signed in after upgrading
+                migrate: (persisted: any, version: number) => {
+                    if (version === 0 && persisted?.user && persisted?.accessToken) {
+                        persisted.accounts = {
+                            [persisted.user.id]: {
+                                user: persisted.user,
+                                accessToken: persisted.accessToken,
+                                addedAt: Date.now()
+                            }
+                        }
+                        persisted.activeAccountId = persisted.user.id
+                    }
+                    return persisted
+                },
                 partialize: (state) => ({
                     // Only persist essential data to avoid quota exceeded errors
                     user: state.user,
                     accessToken: state.accessToken,
+                    accounts: state.accounts,
+                    activeAccountId: state.activeAccountId,
                     darkMode: state.darkMode,
                     currentType: state.currentType,
                     filters: state.filters,
                     lastDataLoad: state.lastDataLoad,
+                    collapsedStatusSections: state.collapsedStatusSections,
                     // Don't persist large arrays to avoid localStorage quota issues
                 }),
             }

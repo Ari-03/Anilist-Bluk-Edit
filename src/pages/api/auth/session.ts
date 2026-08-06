@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { serialize, parse } from 'cookie'
+import { VIEWER_QUERY, pickSessionUser } from '@/lib/viewerQuery'
 
 interface SessionData {
   user: any
@@ -44,7 +45,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Validate token is still valid with AniList
     try {
-      console.log('Validating session token:', sessionData.accessToken.substring(0, 10) + '...')
       
       // Create AbortController for timeout
       const controller = new AbortController()
@@ -58,14 +58,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           'Authorization': `Bearer ${sessionData.accessToken}`,
         },
         body: JSON.stringify({
-          query: '{ Viewer { id name } }'
+          // Full viewer query: the response refreshes the cached user (incl.
+          // custom list names created after the original sign-in)
+          query: VIEWER_QUERY
         }),
         signal: controller.signal
       })
       
       clearTimeout(timeoutId)
-
-      console.log('Session validation response status:', response.status, response.statusText)
 
       // Check if response is successful
       if (!response.ok) {
@@ -107,11 +107,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const data = await response.json()
-      console.log('Session validation result:', data.data ? 'Success' : 'No data', data.errors ? 'Has errors' : 'No errors')
 
       if (data.errors || !data.data?.Viewer) {
         console.error('Session validation GraphQL errors:', data.errors)
-        
+
         // Token is invalid, clear session
         res.setHeader('Set-Cookie', serialize('anilist_session', '', {
           httpOnly: true,
@@ -122,29 +121,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }))
         return res.status(401).json({ error: 'Invalid token', details: data.errors })
       }
+
+      // Re-mint the session with the fresh viewer so profile changes made on
+      // anilist.co (new custom lists, score format, avatar) propagate on load
+      const freshUser = pickSessionUser(data.data.Viewer)
+      const refreshedSession = {
+        user: freshUser,
+        accessToken: sessionData.accessToken,
+        expiresAt: sessionData.expiresAt
+      }
+      res.setHeader('Set-Cookie', serialize(
+        'anilist_session',
+        Buffer.from(JSON.stringify(refreshedSession)).toString('base64'),
+        {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 365 * 24 * 60 * 60
+        }
+      ))
+
+      return res.status(200).json(refreshedSession)
     } catch (error) {
       console.error('Session validation fetch error:', error)
-      
-      // Handle timeout errors specifically
+
+      // On timeout, fall back to the cached session instead of failing —
+      // stale data beats logging the user out when AniList is slow
       if (error instanceof Error && error.name === 'AbortError') {
-        console.error('Session validation timed out')
-        return res.status(408).json({ 
-          error: 'Session validation timed out', 
-          details: 'AniList API is not responding. Please try refreshing the page.'
+        return res.status(200).json({
+          user: sessionData.user,
+          accessToken: sessionData.accessToken,
+          expiresAt: sessionData.expiresAt,
+          stale: true
         })
       }
-      
-      return res.status(500).json({ 
-        error: 'Failed to validate session', 
+
+      return res.status(500).json({
+        error: 'Failed to validate session',
         details: error instanceof Error ? error.message : 'Unknown error'
       })
     }
-
-    return res.status(200).json({
-      user: sessionData.user,
-      accessToken: sessionData.accessToken,
-      expiresAt: sessionData.expiresAt
-    })
   } catch (error) {
     console.error('Session validation error:', error)
     return res.status(500).json({ error: 'Internal server error' })

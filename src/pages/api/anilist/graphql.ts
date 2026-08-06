@@ -16,7 +16,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log('Forwarding request to AniList with variables:', JSON.stringify(variables, null, 2));
 
     const response = await fetch('https://graphql.anilist.co', {
       method: 'POST',
@@ -49,7 +48,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Log large responses for debugging
     const responseSize = JSON.stringify(data).length
     if (responseSize > 1024 * 1024) { // > 1MB
-      console.warn(`Large API response: ${(responseSize / 1024 / 1024).toFixed(2)}MB`)
     }
 
     // Forward successful responses

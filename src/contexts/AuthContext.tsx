@@ -10,6 +10,7 @@ interface AuthContextType {
   signIn: (token: string) => Promise<{ success: boolean; error?: string }>
   signInWithToken: (token: string) => Promise<{ success: boolean; error?: string }>
   signInWithOAuth: (clientId?: string) => void
+  switchAccount: (token: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => void
   refreshSession: () => Promise<void>
 }
@@ -49,11 +50,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const initializeAuth = async () => {
       try {
-        console.log('Initializing auth...', { 
-          hasUser: !!user, 
-          hasToken: !!accessToken,
-          initComplete: initializationComplete.current 
-        })
         initializationComplete.current = true
 
         // Check if we recently validated to avoid rate limiting (only if we have existing auth data)
@@ -62,20 +58,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Only skip validation if we have recent validation AND existing auth state
         if (lastValidation && parseInt(lastValidation) > fiveMinutesAgo && user && accessToken) {
-          console.log('Skipping validation - already authenticated and checked recently', {
-            lastValidation: new Date(parseInt(lastValidation)).toISOString(),
-            user: user?.name,
-            tokenLength: accessToken?.length
-          })
           if (isMounted) setIsLoading(false)
           return
         }
         
-        console.log('Proceeding with authentication check...', {
-          hasLastValidation: !!lastValidation,
-          isRecent: lastValidation && parseInt(lastValidation) > fiveMinutesAgo,
-          hasAuth: !!(user && accessToken)
-        })
 
         // First try to restore session from secure cookies
         const response = await fetch('/api/auth/session', {
@@ -93,15 +79,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             return
           }
         } else if (response.status === 429) {
-          console.log('Rate limited during initialization, will retry later')
           if (isMounted) setIsLoading(false)
           return
         } else if (response.status === 408) {
-          console.log('Session validation timed out during initialization')
           if (isMounted) setIsLoading(false)
           return
         } else if (response.status === 503) {
-          console.log('Network issues during initialization - falling back to cached data')
           if (isMounted) setIsLoading(false)
           return
         }
@@ -116,8 +99,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Set data without API validation to avoid loops
             setUser(userData)
             setAccessToken(storedToken)
-            console.log('Loaded cached auth data from localStorage')
-            // Don't call signInWithToken here to avoid infinite loop
+            // Mark as validated: this effect re-runs when user/accessToken
+            // change, and without this flag the fresh JSON.parse object would
+            // re-trigger initialization forever (session 401 → restore → …)
+            sessionStorage.setItem('last_token_validation', Date.now().toString())
           } catch (error) {
             console.error('Error parsing stored auth data:', error)
             // Clear invalid data
@@ -144,7 +129,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       initializationComplete.current = false
       // Clear any pending active requests on component unmount
       currentRequests.clear()
-      console.log('AuthContext unmounted - cleared active requests')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, accessToken]) 
@@ -167,18 +151,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     )
     
     if (recentRequests.length > 0) {
-      console.log('Preventing duplicate signin request - recent attempt exists', { 
-        recentRequests: recentRequests.length,
-        token: token.substring(0, 10)
-      })
       return { success: false, error: 'Please wait a moment before trying again' }
     }
 
-    console.log('Starting sign in with token...', { 
-      tokenPrefix: token.substring(0, 10),
-      activeRequests: activeRequests.current.size,
-      requestKey
-    })
     
     activeRequests.current.add(requestKey)
     setIsLoading(true)
@@ -186,7 +161,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Set up automatic cleanup after 10 seconds
     const cleanupTimeout = setTimeout(() => {
       activeRequests.current.delete(requestKey)
-      console.log('Cleaned up stale request:', requestKey)
     }, 10000)
     
     try {
@@ -202,10 +176,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const data = await response.json()
 
       if (!response.ok) {
-        console.log('Authentication failed:', { 
-          status: response.status, 
-          error: data.error 
-        })
         setIsLoading(false)
         // Clear validation timestamp on failed authentication to allow retry
         sessionStorage.removeItem('last_token_validation')
@@ -232,7 +202,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setIsLoading(false)
       
-      console.log('Authentication successful:', { user: data.user?.name })
       return { success: true }
     } catch (error) {
       console.error('Sign in error:', error)
@@ -244,7 +213,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Always remove from active requests and clear timeout
       clearTimeout(cleanupTimeout)
       activeRequests.current.delete(requestKey)
-      console.log('Request completed, cleaned up:', { requestKey, remaining: activeRequests.current.size })
     }
   }, [])
 
@@ -266,11 +234,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     const authUrl = `https://anilist.co/api/v2/oauth/authorize?${params.toString()}`
     
-    console.log('OAuth URL:', authUrl)
-    console.log('Expected redirect to your configured redirect URI in AniList app settings')
     
     window.location.href = authUrl
   }
+
+  // Switch to a saved account by re-validating its token through the normal
+  // sign-in path (re-mints the session cookie, refreshes the profile)
+  const switchAccount = useCallback(async (token: string): Promise<{ success: boolean; error?: string }> => {
+    // The recent-validation flag belongs to the previous account
+    sessionStorage.removeItem('last_token_validation')
+    return signInWithToken(token)
+  }, [signInWithToken])
 
   // Refresh session data
   const refreshSession = async (): Promise<void> => {
@@ -302,7 +276,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Clear session storage and active requests FIRST to prevent race conditions
       sessionStorage.removeItem('last_token_validation')
       activeRequests.current.clear()
-      console.log('Cleared active requests and session data for logout')
       
       // Clear server-side session
       await fetch('/api/auth/signout', {
@@ -324,7 +297,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.removeItem('anilist_access_token')
       localStorage.removeItem('anilist_user_data')
       
-      console.log('Logout complete - ready for re-authentication')
     }
   }
 
@@ -337,6 +309,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signIn,
     signInWithToken,
     signInWithOAuth,
+    switchAccount,
     signOut,
     refreshSession,
   }
