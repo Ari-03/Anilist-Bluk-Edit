@@ -2,24 +2,199 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-    width: 8px;
+/* ---------------------------------------------------------------------------
+   Design tokens
+   All colors are RGB triplets so Tailwind can apply alpha:
+   rgb(var(--c-accent) / <alpha-value>)
+--------------------------------------------------------------------------- */
+:root {
+    /* Light theme */
+    --c-page: 237 241 245;
+    /* #EDF1F5 */
+    --c-surface: 255 255 255;
+    /* #FFFFFF */
+    --c-raised: 251 252 253;
+    /* #FBFCFD */
+    --c-edge: 227 234 242;
+    /* #E3EAF2 */
+    --c-fg: 38 52 63;
+    /* #26343F */
+    --c-fg-muted: 100 115 128;
+    /* #647380 */
+    --c-fg-subtle: 148 163 178;
+    /* #94A3B2 */
+
+    --c-accent: 61 180 242;
+    /* #3DB4F2 */
+    --c-accent-hover: 46 134 193;
+    /* #2E86C1 */
+
+    /* Bulk edit / selection accent */
+    --c-purple: 168 85 247;
+    /* #A855F7 */
+    --c-purple-hover: 147 51 234;
+    /* #9333EA */
+
+    --c-success: 34 197 94;
+    --c-danger: 236 74 94;
+    --c-warning: 245 158 11;
+
+    /* Entry status colors */
+    --c-status-current: 34 197 94;
+    --c-status-planning: 61 180 242;
+    --c-status-completed: 146 86 243;
+    --c-status-dropped: 236 74 94;
+    --c-status-paused: 245 158 11;
+    --c-status-repeating: 108 123 240;
+
+    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.08);
+    --shadow-raised: 0 4px 12px rgb(15 23 42 / 0.08), 0 2px 4px rgb(15 23 42 / 0.05);
+    --shadow-overlay: 0 12px 32px rgb(15 23 42 / 0.16), 0 4px 8px rgb(15 23 42 / 0.08);
 }
 
-::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
+.dark {
+    color-scheme: dark;
+
+    --c-page: 11 22 34;
+    /* #0B1622 */
+    --c-surface: 21 31 46;
+    /* #151F2E */
+    --c-raised: 29 42 59;
+    /* #1D2A3B */
+    --c-edge: 42 58 78;
+    /* #2A3A4E */
+    --c-fg: 237 241 246;
+    /* #EDF1F6 */
+    --c-fg-muted: 159 173 189;
+    /* #9FADBD */
+    --c-fg-subtle: 107 123 143;
+    /* #6B7B8F */
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.25);
+    --shadow-raised: 0 4px 12px rgb(0 0 0 / 0.35), 0 2px 4px rgb(0 0 0 / 0.25);
+    --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.5), 0 4px 8px rgb(0 0 0 / 0.3);
 }
 
-::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+@layer base {
+    body {
+        @apply bg-page text-fg font-sans antialiased;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        @apply bg-edge rounded-full border-2 border-solid border-transparent bg-clip-padding;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        @apply bg-fg-subtle;
+    }
 }
 
-::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-400 dark:bg-gray-500;
+@layer components {
+
+    /* Surfaces */
+    .card {
+        @apply bg-surface rounded-xl border border-edge;
+        box-shadow: var(--shadow-card);
+    }
+
+    /* Buttons */
+    .btn-primary {
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-accent text-white text-sm font-semibold transition-colors duration-150 hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+    }
+
+    /* Bulk edit call-to-action */
+    .btn-purple {
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-purple text-white text-sm font-semibold transition-all duration-150 hover:bg-purple-hover hover:shadow-[0_0_16px_rgb(var(--c-purple)/0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-purple focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+    }
+
+    .btn-secondary {
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-raised text-fg text-sm font-semibold border border-edge transition-colors duration-150 hover:bg-edge/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+    }
+
+    .btn-danger {
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-danger text-white text-sm font-semibold transition-colors duration-150 hover:bg-danger/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+    }
+
+    .btn-ghost {
+        @apply inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg text-fg-muted text-sm font-medium transition-colors duration-150 hover:bg-raised hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none;
+    }
+
+    /* Icon-only button */
+    .btn-icon {
+        @apply inline-flex items-center justify-center w-9 h-9 rounded-lg text-fg-muted transition-colors duration-150 hover:bg-raised hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none;
+    }
+
+    /* Form controls */
+    .input {
+        @apply w-full h-10 px-3 rounded-lg border border-edge bg-surface text-fg text-sm placeholder:text-fg-subtle transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:opacity-50;
+    }
+
+    .select {
+        @apply w-full h-10 pl-3 pr-8 rounded-lg border border-edge bg-surface text-fg text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent appearance-none bg-no-repeat disabled:opacity-50;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23647380' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-position: right 0.6rem center;
+    }
+
+    .checkbox {
+        @apply w-[18px] h-[18px] rounded border-2 border-edge bg-surface text-accent transition-colors duration-150 checked:bg-accent checked:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface cursor-pointer;
+    }
+
+    /* Legacy loading spinner (replaced progressively by skeletons) */
+    .loading-spinner {
+        border: 3px solid rgb(var(--c-accent) / 0.15);
+        border-left-color: rgb(var(--c-accent));
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    /* Brand gradient (login hero, wordmark accents) */
+    .brand-gradient {
+        background: linear-gradient(135deg, #3db4f2 0%, #2e86c1 60%, #9256f3 130%);
+    }
 }
 
-/* Custom animations */
+@layer utilities {
+    .text-balance {
+        text-wrap: balance;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Keyframes
+-------------------------------------------------------------------------- */
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes shimmer {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+@keyframes indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(400%);
+    }
+}
+
+/* Legacy animations still referenced by components pending redesign */
 @keyframes fadeIn {
     from {
         opacity: 0.3;
@@ -52,115 +227,6 @@
     animation: fadeOut 0.15s ease-in forwards;
 }
 
-@keyframes slideUp {
-    from {
-        transform: translateY(10px);
-        opacity: 0;
-    }
-
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-/* Loading spinner */
-.loading-spinner {
-    border: 3px solid rgba(59, 130, 246, 0.1);
-    border-left: 3px solid #3b82f6;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-/* AniList theme colors */
-.anilist-blue {
-    background: linear-gradient(135deg, #3DB4F2 0%, #2E86C1 100%);
-}
-
-/* Dark mode styles */
-.dark {
-    color-scheme: dark;
-}
-
-/* Media card hover effects */
-.media-card {
-    transition: all 0.3s ease;
-}
-
-.media-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-}
-
-/* Checkbox custom styles */
-.checkbox {
-    @apply w-5 h-5 rounded border-2 border-gray-300 dark:border-gray-600 checked:bg-anilist-blue checked:border-anilist-blue focus:ring-2 focus:ring-anilist-blue focus:ring-opacity-50;
-}
-
-/* Button variants */
-.btn-primary {
-    @apply bg-anilist-blue text-white font-medium py-2 px-4 rounded-lg hover:bg-opacity-90 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-anilist-blue focus:ring-opacity-50;
-}
-
-.btn-secondary {
-    @apply bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-medium py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50;
-}
-
-.btn-danger {
-    @apply bg-red-500 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50;
-}
-
-/* Input styles */
-.input {
-    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-anilist-blue focus:border-transparent;
-}
-
-/* Select styles */
-.select {
-    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-anilist-blue focus:border-transparent appearance-none;
-}
-
-/* Card styles */
-.card {
-    @apply bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700;
-}
-
-/* Status badges */
-.status-current {
-    @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
-}
-
-.status-planning {
-    @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
-}
-
-.status-completed {
-    @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200;
-}
-
-.status-dropped {
-    @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
-}
-
-.status-paused {
-    @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
-}
-
-.status-repeating {
-    @apply bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200;
-}
-
-/* Notification animations */
 @keyframes slide-in-right {
     from {
         transform: translateX(100%);
@@ -177,64 +243,12 @@
     animation: slide-in-right 0.3s ease-out;
 }
 
-/* Dual Range Slider Styles */
-.slider {
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    cursor: pointer;
-    pointer-events: auto;
-    height: 8px; /* Reduced height since no thumbs */
+/* Media card hover (legacy; replaced in Phase 3 card redesign) */
+.media-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Webkit Styles */
-.slider::-webkit-slider-track {
-    background: transparent;
-    height: 8px;
-    border-radius: 4px;
+.media-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-raised);
 }
-
-.slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    height: 0;
-    width: 0;
-    cursor: pointer;
-    box-shadow: none;
-    margin-top: 0;
-    /* Hide the thumb completely */
-}
-
-.slider::-webkit-slider-thumb:hover {
-    background: transparent;
-    transform: none;
-}
-
-/* Firefox Styles */
-.slider::-moz-range-track {
-    background: transparent;
-    height: 8px;
-    border-radius: 4px;
-    border: none;
-}
-
-.slider::-moz-range-thumb {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    height: 0;
-    width: 0;
-    cursor: pointer;
-    box-shadow: none;
-    /* Hide the thumb completely */
-}
-
-.slider::-moz-range-thumb:hover {
-    background: transparent;
-    transform: none;
-}
-
-/* Remove dark mode thumb styles since thumbs are hidden */

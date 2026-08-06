@@ -7,6 +7,31 @@ import {
   Media,
   ScoreFormat,
 } from '@/types/anilist'
+import { VIEWER_QUERY } from '@/lib/viewerQuery'
+
+export interface RelationMediaNode {
+  id: number
+  type: MediaType
+  format?: string
+  status?: string
+  episodes?: number | null
+  chapters?: number | null
+  isAdult?: boolean
+  title?: { userPreferred?: string; romaji?: string }
+  coverImage?: { medium?: string; color?: string }
+  startDate?: { year?: number | null }
+  mediaListEntry?: { id: number; status?: MediaListStatus; progress?: number } | null
+}
+
+export interface RelationLookupResult {
+  id: number
+  relations?: {
+    edges?: Array<{
+      relationType?: string
+      node?: RelationMediaNode
+    }> | null
+  } | null
+}
 
 export class AniListClient {
   private accessToken?: string
@@ -49,60 +74,7 @@ export class AniListClient {
   }
 
   async getCurrentUser(): Promise<User> {
-    const query = `
-      query GetCurrentUser {
-        Viewer {
-          id
-          name
-          avatar {
-            large
-            medium
-          }
-          bannerImage
-          about
-          options {
-            titleLanguage
-            displayAdultContent
-            airingNotifications
-            profileColor
-          }
-          mediaListOptions {
-            scoreFormat
-            rowOrder
-            animeList {
-              sectionOrder
-              splitCompletedSectionByFormat
-              customLists
-              advancedScoring
-              advancedScoringEnabled
-            }
-            mangaList {
-              sectionOrder
-              splitCompletedSectionByFormat
-              customLists
-              advancedScoring
-              advancedScoringEnabled
-            }
-          }
-          statistics {
-            anime {
-              count
-              meanScore
-              minutesWatched
-              episodesWatched
-            }
-            manga {
-              count
-              meanScore
-              chaptersRead
-              volumesRead
-            }
-          }
-        }
-      }
-    `
-
-    const data = await this.request<{ Viewer: User }>(query)
+    const data = await this.request<{ Viewer: User }>(VIEWER_QUERY)
     return data.Viewer
   }
 
@@ -466,6 +438,49 @@ export class AniListClient {
     return data.UpdateMediaListEntries
   }
 
+  /**
+   * Batched relations lookup: one aliased query fetches PREQUEL/SEQUEL (and
+   * other) edges for up to ~12 media ids. `mediaListEntry` on each node is
+   * viewer-scoped, so the caller learns the current list status for free.
+   */
+  async getMediaRelations(mediaIds: number[]): Promise<RelationLookupResult[]> {
+    if (mediaIds.length === 0) return []
+
+    const varDefs = mediaIds.map((_, i) => `$id${i}: Int`).join(', ')
+    const aliases = mediaIds.map((_, i) => `
+      m${i}: Media(id: $id${i}) {
+        id
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              type
+              format
+              status
+              episodes
+              chapters
+              isAdult
+              title { userPreferred romaji }
+              coverImage { medium color }
+              startDate { year }
+              mediaListEntry { id status progress }
+            }
+          }
+        }
+      }
+    `).join('\n')
+
+    const query = `query (${varDefs}) { ${aliases} }`
+    const variables = mediaIds.reduce((acc, id, i) => {
+      acc[`id${i}`] = id
+      return acc
+    }, {} as Record<string, number>)
+
+    const data = await this.request<Record<string, RelationLookupResult | null>>(query, variables)
+    return Object.values(data).filter((m): m is RelationLookupResult => m !== null)
+  }
+
   private isRateLimitError(error: any): boolean {
     // Check for HTTP 429 status
     if (error?.response?.status === 429 || error?.status === 429) {
@@ -679,19 +694,39 @@ export const getScoreDisplay = (score: number, format: ScoreFormat): string => {
 export const getStatusColor = (status: MediaListStatus): string => {
   switch (status) {
     case MediaListStatus.CURRENT:
-      return 'bg-green-500'
+      return 'bg-status-current'
     case MediaListStatus.PLANNING:
-      return 'bg-blue-500'
+      return 'bg-status-planning'
     case MediaListStatus.COMPLETED:
-      return 'bg-purple-500'
+      return 'bg-status-completed'
     case MediaListStatus.DROPPED:
-      return 'bg-red-500'
+      return 'bg-status-dropped'
     case MediaListStatus.PAUSED:
-      return 'bg-orange-500'
+      return 'bg-status-paused'
     case MediaListStatus.REPEATING:
-      return 'bg-indigo-500'
+      return 'bg-status-repeating'
     default:
-      return 'bg-gray-500'
+      return 'bg-fg-subtle'
+  }
+}
+
+// Text color counterpart (chips, dots) for an entry status
+export const getStatusTextColor = (status: MediaListStatus): string => {
+  switch (status) {
+    case MediaListStatus.CURRENT:
+      return 'text-status-current'
+    case MediaListStatus.PLANNING:
+      return 'text-status-planning'
+    case MediaListStatus.COMPLETED:
+      return 'text-status-completed'
+    case MediaListStatus.DROPPED:
+      return 'text-status-dropped'
+    case MediaListStatus.PAUSED:
+      return 'text-status-paused'
+    case MediaListStatus.REPEATING:
+      return 'text-status-repeating'
+    default:
+      return 'text-fg-subtle'
   }
 }
 

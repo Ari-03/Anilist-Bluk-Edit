@@ -16,7 +16,6 @@ const AuthCallback: React.FC = () => {
     const handleCallback = async () => {
       // Prevent duplicate processing (race condition and Strict Mode protection)
       if (processingRef.current) {
-        console.log('OAuth callback already processing, skipping')
         return
       }
       
@@ -25,7 +24,6 @@ const AuthCallback: React.FC = () => {
       try {
         // Extract access token from URL fragment
         const fragment = window.location.hash.substring(1)
-        console.log('OAuth callback fragment:', fragment)
         
         const params = new URLSearchParams(fragment)
         const accessToken = params.get('access_token')
@@ -33,14 +31,6 @@ const AuthCallback: React.FC = () => {
         const errorDescription = params.get('error_description')
         const tokenType = params.get('token_type')
         const expiresIn = params.get('expires_in')
-
-        console.log('OAuth callback params:', {
-          accessToken: accessToken ? accessToken.substring(0, 10) + '...' : null,
-          error,
-          errorDescription,
-          tokenType,
-          expiresIn
-        })
 
         if (error) {
           if (isMounted) {
@@ -57,12 +47,6 @@ const AuthCallback: React.FC = () => {
           }
           return
         }
-
-        console.log('Token format check:', {
-          length: accessToken.length,
-          startsCorrectly: accessToken.length > 10,
-          type: typeof accessToken
-        })
 
         // Use the new secure sign-in method
         const result = await signInWithToken(accessToken)

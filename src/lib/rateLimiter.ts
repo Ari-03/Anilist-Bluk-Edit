@@ -86,7 +86,6 @@ export class RateLimiter {
                 // For 0.5 req/sec (30/min), wait at least 2 seconds, but increase with retries
                 const baseDelay = Math.ceil(1000 / this.config.maxRequestsPerSecond)
                 const delay = baseDelay * Math.pow(this.config.backoffMultiplier, retryCount)
-                console.warn(`Rate limit hit, waiting ${delay}ms before retry (attempt ${retryCount + 1}/${this.config.maxRetries})`)
 
                 await this.delay(delay)
                 return this.executeWithRetry(requestFn, retryCount + 1)
@@ -98,7 +97,6 @@ export class RateLimiter {
 
                 // Use exponential backoff for network errors
                 const delay = this.config.initialRetryDelay * Math.pow(this.config.backoffMultiplier, retryCount)
-                console.warn(`Request failed, waiting ${delay}ms before retry (attempt ${retryCount + 1}/${this.config.maxRetries})`)
 
                 await this.delay(delay)
                 return this.executeWithRetry(requestFn, retryCount + 1)
@@ -133,7 +131,6 @@ export class RateLimiter {
     }
 
     stop(): void {
-        console.log('Rate limiter stop signal received.')
         this.stopped = true
         this.requestQueue = [] // Clear the queue
     }
@@ -158,7 +155,6 @@ export class RateLimiter {
             const oldestRequest = Math.min(...this.requestTimes)
             const waitTime = windowMs - (now - oldestRequest) + 100 // Add 100ms buffer
             if (waitTime > 0) {
-                console.log(`Rate limit: waiting ${waitTime}ms (${this.requestTimes.length}/${maxRequestsInWindow} requests in ${windowMs}ms window)`)
                 await this.delay(waitTime)
             }
         }

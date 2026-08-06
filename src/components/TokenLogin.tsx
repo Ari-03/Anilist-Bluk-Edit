@@ -1,110 +1,46 @@
-import React, { useState } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
-import { LogIn, AlertCircle } from 'lucide-react'
+import React from 'react'
+import { Layers, Zap, ListChecks } from 'lucide-react'
+import TokenLoginForm from '@/components/TokenLoginForm'
 
 const TokenLogin: React.FC = () => {
-  const { signInWithOAuth, isLoading } = useAuth()
-  const [error, setError] = useState('')
-  const [oauthClientId, setOauthClientId] = useState('')
-  const [showOAuthSetup, setShowOAuthSetup] = useState(false)
+    return (
+        <div className="min-h-screen bg-page relative flex items-center justify-center p-4 overflow-hidden">
+            {/* Ambient gradient blobs */}
+            <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-accent/20 blur-3xl" />
+            <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-status-completed/15 blur-3xl" />
 
+            <div className="relative w-full max-w-md">
+                <div className="card shadow-overlay p-8">
+                    <div className="text-center mb-8">
+                        <div className="w-14 h-14 rounded-2xl brand-gradient mx-auto mb-4 flex items-center justify-center shadow-raised">
+                            <Layers className="w-7 h-7 text-white" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-fg">AniList Bulk Edit</h1>
+                        <p className="mt-1.5 text-sm text-fg-muted">
+                            Update, organize, and clean up your whole list in a few clicks
+                        </p>
+                    </div>
 
-  const handleOAuthLogin = () => {
-    if (!oauthClientId.trim() && !process.env.NEXT_PUBLIC_ANILIST_CLIENT_ID) {
-      setError('Please enter your AniList Client ID or configure it in environment variables')
-      return
-    }
-    
-    setError('')
-    signInWithOAuth(oauthClientId.trim() || undefined)
-  }
+                    <TokenLoginForm />
 
-  const hasConfiguredClientId = !!process.env.NEXT_PUBLIC_ANILIST_CLIENT_ID
+                    <div className="mt-8 pt-6 border-t border-edge grid grid-cols-2 gap-3 text-left">
+                        <div className="flex items-start gap-2">
+                            <ListChecks className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-fg-muted">Bulk edit status, score, progress & custom lists</p>
+                        </div>
+                        <div className="flex items-start gap-2">
+                            <Zap className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-fg-muted">Rate-limit aware — safe on large libraries</p>
+                        </div>
+                    </div>
+                </div>
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
-            AniList Bulk Edit
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Sign in with AniList to continue
-          </p>
-        </div>
-
-        {/* Centered OAuth Login */}
-        <div className="space-y-6">
-          {hasConfiguredClientId ? (
-            <div className="text-center">
-              <button
-                onClick={handleOAuthLogin}
-                disabled={isLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 text-lg shadow-lg hover:shadow-xl"
-              >
-                <LogIn className="h-6 w-6" />
-                {isLoading ? 'Connecting...' : 'Login with AniList'}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="text-center">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  Connect with AniList
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Enter your AniList Client ID to enable OAuth login
+                <p className="mt-4 text-center text-xs text-fg-subtle">
+                    Your token stays in your browser; edits go straight to AniList.
                 </p>
-              </div>
-              
-              {!showOAuthSetup ? (
-                <div className="text-center">
-                  <button
-                    onClick={() => setShowOAuthSetup(true)}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 text-lg shadow-lg hover:shadow-xl"
-                  >
-                    <LogIn className="h-6 w-6" />
-                    Set up AniList Login
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <input
-                    type="text"
-                    value={oauthClientId}
-                    onChange={(e) => setOauthClientId(e.target.value)}
-                    placeholder="Enter your AniList Client ID"
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-lg"
-                    disabled={isLoading}
-                  />
-                  <button
-                    onClick={handleOAuthLogin}
-                    disabled={isLoading || !oauthClientId.trim()}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 text-lg shadow-lg hover:shadow-xl"
-                  >
-                    <LogIn className="h-6 w-6" />
-                    {isLoading ? 'Connecting...' : 'Login with AniList'}
-                  </button>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                    Need help? Check the AniList Developer settings to create your Client ID
-                  </p>
-                </div>
-              )}
             </div>
-          )}
-
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <div className="flex items-center">
-                <AlertCircle className="h-5 w-5 text-red-400 mr-3 flex-shrink-0" />
-                <div className="text-sm text-red-700 dark:text-red-400">{error}</div>
-              </div>
-            </div>
-          )}
         </div>
-      </div>
-    </div>
-  )
+    )
 }
 
 export default TokenLogin

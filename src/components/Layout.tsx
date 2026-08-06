@@ -1,7 +1,7 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { ImageKitProvider } from 'imagekitio-next'
+import { ImageKitProvider } from '@imagekit/next'
 
 interface LayoutProps {
   children: ReactNode
