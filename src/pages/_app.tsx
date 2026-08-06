@@ -7,19 +7,23 @@ import '@/styles/globals.css'
 
 const inter = Inter({
     subsets: ['latin'],
-    variable: '--font-sans',
     display: 'swap',
 })
 
 export default function App({ Component, pageProps }: AppProps) {
     return (
-        <AuthProvider>
-            <LazyMotion features={domAnimation} strict>
-                <div className={`${inter.variable} font-sans`}>
+        <>
+            <style jsx global>{`
+                :root {
+                    --font-sans: ${inter.style.fontFamily};
+                }
+            `}</style>
+            <AuthProvider>
+                <LazyMotion features={domAnimation} strict>
                     <Component {...pageProps} />
-                </div>
-            </LazyMotion>
-            <Analytics />
-        </AuthProvider>
+                </LazyMotion>
+                <Analytics />
+            </AuthProvider>
+        </>
     )
 }

@@ -77,7 +77,7 @@
 
 @layer base {
     body {
-        @apply bg-page text-fg antialiased;
+        @apply bg-page text-fg font-sans antialiased;
     }
 
     /* Custom scrollbar */
