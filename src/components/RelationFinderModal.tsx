@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, m } from 'framer-motion'
-import { IKImage } from 'imagekitio-next'
+import { Image as IKImage } from '@imagekit/next'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'

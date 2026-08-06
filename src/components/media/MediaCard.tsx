@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { IKImage } from 'imagekitio-next'
+import { Image as IKImage } from '@imagekit/next'
 import { MediaList, MediaType } from '@/types/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'
 import { formatProgress, formatScore, hasScore, progressPercent, formatMediaFormat } from '@/lib/entryDisplay'
@@ -69,7 +69,6 @@ export default function MediaCard({
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
                         transformation={[{ quality: 80, format: 'auto' }]}
                         loading="lazy"
-                        lqip={{ active: true, quality: 20 }}
                     />
                 ) : (
                     <DefaultCover className="w-full h-full" size="large" />

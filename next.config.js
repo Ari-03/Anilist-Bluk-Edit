@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    swcMinify: true,
     transpilePackages: [
         'antd',
         '@ant-design/icons',
@@ -31,20 +30,6 @@ const nextConfig = {
         dangerouslyAllowSVG: false,
         contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     },
-    // Add cache headers for static assets
-    async headers() {
-        return [
-            {
-                source: '/_next/image(.*)',
-                headers: [
-                    {
-                        key: 'Cache-Control',
-                        value: 'public, max-age=31536000, stale-while-revalidate=31536000',
-                    },
-                ],
-            },
-        ]
-    },
 }
 
-module.exports = nextConfig 
+module.exports = nextConfig

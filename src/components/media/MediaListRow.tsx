@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { IKImage } from 'imagekitio-next'
+import { Image as IKImage } from '@imagekit/next'
 import { MediaList, MediaType } from '@/types/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'
 import { formatProgress, formatScore, hasScore, formatMediaFormat } from '@/lib/entryDisplay'
@@ -83,7 +83,6 @@ export default function MediaListRow({
                         sizes="44px"
                         transformation={[{ quality: 65, format: 'auto' }]}
                         loading="lazy"
-                        lqip={{ active: true, quality: 20 }}
                     />
                 ) : (
                     <DefaultCover className="w-full h-full rounded-md" size="small" />
