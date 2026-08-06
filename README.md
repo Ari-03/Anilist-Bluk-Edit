@@ -48,7 +48,7 @@ A powerful web application for efficiently managing your AniList anime and manga
 ## Setup Instructions
 
 ### Prerequisites
-- Node.js 26.7.0 or higher
+- Node.js 24.x
 - AniList account
 
 ### 1. Clone the Repository

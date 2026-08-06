@@ -25,7 +25,7 @@
         "zustand": "^4.5.7"
     },
     "devDependencies": {
-        "@types/node": "^26.1.2",
+        "@types/node": "^24.13.3",
         "@types/react": "^18.3.31",
         "@types/react-dom": "^18.3.7",
         "autoprefixer": "^10.5.4",
@@ -36,6 +36,6 @@
         "typescript": "^5.9.3"
     },
     "engines": {
-        "node": ">=26.7.0"
+        "node": "24.x"
     }
 }
