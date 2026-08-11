@@ -1,3 +1,5 @@
+
+
 # AniList Bulk Edit
 
 A powerful web application for efficiently managing your AniList anime and manga collections with bulk editing capabilities.
@@ -38,7 +40,7 @@ A powerful web application for efficiently managing your AniList anime and manga
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, React 18, TypeScript
+- **Frontend**: Next.js 16, React 18, TypeScript
 - **Authentication**: Custom token-based authentication with AniList personal access tokens
 - **State Management**: Zustand with persistence
 - **Styling**: Tailwind CSS with custom components
@@ -267,4 +269,4 @@ If you encounter issues:
 
 ---
 
-**Note**: This application is not affiliated with AniList. It's a third-party tool that uses the public AniList API. 
+**Note**: This application is not affiliated with AniList. It's a third-party tool that uses the public AniList API.
