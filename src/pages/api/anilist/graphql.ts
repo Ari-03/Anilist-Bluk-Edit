@@ -19,6 +19,9 @@ const parseJson = (text: string): unknown => {
  * GraphQL-shaped body even when AniList (or Cloudflare in front of it) answers
  * with an HTML error page. The token never leaves the server in a URL.
  */
+// A whole-collection response can exceed Next's 4 MB API warning threshold on big lists
+export const config = { api: { responseLimit: false } }
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })

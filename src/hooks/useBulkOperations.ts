@@ -225,6 +225,20 @@ export function useBulkOperations(client: AniListClient | null) {
         let entries = entriesOverride ?? store.getSelectedEntries()
         if (entries.length === 0) return
 
+        // AniList drops an entry that is hidden from status lists and on no
+        // custom list from every list view, including this app's, with no way
+        // back from the UI. Refuse rather than make entries vanish.
+        if (updates.hiddenFromStatusLists === true) {
+            const orphaned = entries.filter(e => applyCustomListChanges(e.customLists, customListChanges).length === 0).length
+            if (orphaned > 0) {
+                store.addNotification({
+                    type: 'error',
+                    message: `${orphaned} of the selected entries ${orphaned === 1 ? 'is' : 'are'} on no custom list. Hiding ${orphaned === 1 ? 'it' : 'them'} from status lists would remove ${orphaned === 1 ? 'it' : 'them'} from every list on AniList, including this app — add a custom list in the same edit first.`
+                })
+                return
+            }
+        }
+
         // customLists is a full-replacement array on AniList's side, so a write
         // built from stale entry data silently drops memberships added
         // elsewhere. Refresh first when the local snapshot is past its window.
@@ -304,8 +318,12 @@ export function useBulkOperations(client: AniListClient | null) {
                     continue
                 }
 
-                // An entry that is already gone (e.g. on retry) counts as deleted
-                const gone = batch.filter((_, i) => results[i].ok || /not found/i.test(results[i].ok ? '' : results[i].message))
+                // An entry that is already gone (on retry, or deleted by an aborted
+                // batch) fails validation on the id; that counts as deleted
+                const gone = batch.filter((_, i) => {
+                    const r = results[i]
+                    return r.ok || /not found|selected id is invalid/i.test(r.message)
+                })
                 useStore.getState().removeMediaListEntries(gone)
                 ledger.ok(gone)
                 const goneSet = new Set(gone)

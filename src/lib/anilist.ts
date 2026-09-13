@@ -60,11 +60,43 @@ export interface EntryUpdates {
 
 type Variables = Record<string, unknown>
 
+/**
+ * Builds an aliased document with one alias per line so error `locations`
+ * map back to an alias (see splitAliases). Whitespace inside each field is
+ * collapsed, so multi-line selection sets are fine; `defs` must be one line.
+ */
+function aliasedDocument(kind: 'query' | 'mutation', defs: string, fields: string[]) {
+  const query = [`${kind} (${defs}) {`, ...fields.map(f => f.replace(/\s+/g, ' ').trim()), '}'].join('\n')
+  return { query, aliasLines: fields.map((_, i) => i + 2) }
+}
+
 const MAX_RATE_LIMIT_RETRIES = 2
 const MAX_TRANSIENT_RETRIES = 1
 const TRANSIENT_RETRY_DELAY_MS = 1000
 
 // Every mutation returns this so settled updates cover each field the forms can edit
+const RELATION_FIELDS = `
+  id
+  relations {
+    edges {
+      relationType
+      node {
+        id
+        type
+        format
+        status
+        episodes
+        chapters
+        isAdult
+        title { userPreferred romaji }
+        coverImage { medium color }
+        startDate { year }
+        mediaListEntry { id status progress }
+      }
+    }
+  }
+`
+
 const ENTRY_FIELDS = `
   id
   mediaId
@@ -148,11 +180,39 @@ export class AniListClient {
     return body.data as T
   }
 
+  /**
+   * Runs an aliased batch and, when AniList aborted it because of one alias,
+   * re-sends the aliases that were never attempted without the culprit. Each
+   * round drops at least one item, so k bad entries cost k extra requests
+   * instead of failing the whole batch.
+   */
+  private async settleAliased<I, T>(
+    items: I[],
+    send: (items: I[]) => Promise<AliasResult<T>[]>
+  ): Promise<AliasResult<T>[]> {
+    if (items.length === 0) return []
+    const results = await send(items)
+    const blamed = results.some(r => !r.ok && r.blamed)
+    const untried = results.flatMap((r, i) => (!r.ok && !r.blamed ? [i] : []))
+    if (!blamed || untried.length === 0) return results
+
+    const retried = await this.settleAliased(untried.map(i => items[i]), send)
+    untried.forEach((i, k) => {
+      results[i] = { ...retried[k], alias: results[i].alias }
+    })
+    return results
+  }
+
   async getCurrentUser(opts?: RequestOptions): Promise<User> {
     const data = await this.request<{ Viewer: User }>(VIEWER_QUERY, undefined, { retryTransient: true, ...opts })
     return data.Viewer
   }
 
+  /**
+   * Whole collection in one request. Only fields the UI renders are selected:
+   * descriptions and tags alone pushed a 400-entry list past 4 MB, which is
+   * Next's API route warning threshold and close to serverless body limits.
+   */
   async getAllMediaLists(userId: number, type: MediaType, opts?: RequestOptions): Promise<MediaList[]> {
     const query = `
       query GetAllMediaLists($userId: Int!, $type: MediaType!) {
@@ -180,14 +240,11 @@ export class AniListClient {
               createdAt
               media {
                 id
-                idMal
                 title { romaji english native userPreferred }
                 type
                 format
                 status
-                description
                 startDate { year month day }
-                endDate { year month day }
                 season
                 seasonYear
                 episodes
@@ -195,14 +252,8 @@ export class AniListClient {
                 chapters
                 volumes
                 genres
-                averageScore
-                popularity
                 coverImage { large medium color }
-                bannerImage
-                tags { id name description category rank isGeneralSpoiler isMediaSpoiler isAdult }
-                nextAiringEpisode { airingAt timeUntilAiring episode }
                 siteUrl
-                isAdult
                 countryOfOrigin
               }
             }
@@ -215,7 +266,10 @@ export class AniListClient {
       MediaListCollection: { lists: { entries: MediaList[] }[] }
     }>(query, { userId, type }, { retryTransient: true, ...opts })
 
-    return data.MediaListCollection.lists.flatMap((list) => list.entries)
+    // An entry on a custom list is returned under that list too; keep one copy
+    // per id or bulk runs would process (and count) it twice.
+    const byId = new Map(data.MediaListCollection.lists.flatMap(list => list.entries).map(e => [e.id, e]))
+    return Array.from(byId.values())
   }
 
   /** Save one entry (creates it when `mediaId` is not on the list yet). Idempotent, so retried on 5xx. */
@@ -307,45 +361,39 @@ export class AniListClient {
 
   /**
    * Aliased batch of SaveMediaListEntry (up to ~10 per request). Results come
-   * back in input order, one per entry, so one bad entry no longer fails the
-   * batch. Idempotent, so retried on 5xx.
+   * back in input order, one per entry; a rejected entry is blamed and the
+   * rest are re-sent without it. Idempotent, so retried on 5xx.
    */
   async bulkSaveMediaListEntries(
     entries: Array<{ mediaId: number; updates: EntryUpdates }>,
     opts?: RequestOptions
   ): Promise<AliasResult<MediaList>[]> {
-    if (entries.length === 0) return []
+    return this.settleAliased(entries, async batch => {
+      const defs = batch.map((_, i) =>
+        `$mediaId${i}: Int, $status${i}: MediaListStatus, $score${i}: Float, $progress${i}: Int, ` +
+        `$private${i}: Boolean, $notes${i}: String, $hiddenFromStatusLists${i}: Boolean, $customLists${i}: [String]`
+      ).join(', ')
+      const fields = batch.map((_, i) =>
+        `entry${i}: SaveMediaListEntry(mediaId: $mediaId${i}, status: $status${i}, score: $score${i}, progress: $progress${i}, ` +
+        `private: $private${i}, notes: $notes${i}, hiddenFromStatusLists: $hiddenFromStatusLists${i}, customLists: $customLists${i}) { ${ENTRY_FIELDS} }`
+      )
 
-    const defs = entries.map((_, i) => `
-      $mediaId${i}: Int, $status${i}: MediaListStatus, $score${i}: Float, $progress${i}: Int,
-      $private${i}: Boolean, $notes${i}: String, $hiddenFromStatusLists${i}: Boolean, $customLists${i}: [String]
-    `).join('\n')
+      const variables: Variables = {}
+      batch.forEach(({ mediaId, updates }, i) => {
+        variables[`mediaId${i}`] = mediaId
+        variables[`status${i}`] = updates.status
+        variables[`score${i}`] = updates.score
+        variables[`progress${i}`] = updates.progress
+        variables[`private${i}`] = updates.private
+        variables[`notes${i}`] = updates.notes
+        variables[`hiddenFromStatusLists${i}`] = updates.hiddenFromStatusLists
+        variables[`customLists${i}`] = updates.customLists
+      })
 
-    const fields = entries.map((_, i) => `
-      entry${i}: SaveMediaListEntry(
-        mediaId: $mediaId${i}, status: $status${i}, score: $score${i}, progress: $progress${i},
-        private: $private${i}, notes: $notes${i}, hiddenFromStatusLists: $hiddenFromStatusLists${i}, customLists: $customLists${i}
-      ) { ${ENTRY_FIELDS} }
-    `).join('\n')
-
-    const variables: Variables = {}
-    entries.forEach(({ mediaId, updates }, i) => {
-      variables[`mediaId${i}`] = mediaId
-      variables[`status${i}`] = updates.status
-      variables[`score${i}`] = updates.score
-      variables[`progress${i}`] = updates.progress
-      variables[`private${i}`] = updates.private
-      variables[`notes${i}`] = updates.notes
-      variables[`hiddenFromStatusLists${i}`] = updates.hiddenFromStatusLists
-      variables[`customLists${i}`] = updates.customLists
+      const { query, aliasLines } = aliasedDocument('mutation', defs, fields)
+      const body = await this.exchange<Record<string, MediaList | null>>(query, variables, { retryTransient: true, ...opts })
+      return splitAliases(body, batch.map((_, i) => `entry${i}`), aliasLines)
     })
-
-    const body = await this.exchange<Record<string, MediaList | null>>(
-      `mutation (${defs}) { ${fields} }`,
-      variables,
-      { retryTransient: true, ...opts }
-    )
-    return splitAliases(body, entries.map((_, i) => `entry${i}`))
   }
 
   async deleteMediaListEntry(id: number, opts?: RequestOptions): Promise<{ deleted: boolean }> {
@@ -358,20 +406,22 @@ export class AniListClient {
     return data.DeleteMediaListEntry
   }
 
-  /** Aliased batch of DeleteMediaListEntry. Results come back in input order. */
+  /**
+   * Aliased batch of DeleteMediaListEntry. Results come back in input order.
+   * AniList runs the deletes in order and still aborts the response on a bad
+   * id, so an entry reported as not attempted may already be gone; the
+   * re-send then blames it as invalid, which callers treat as deleted.
+   */
   async bulkDeleteMediaListEntries(ids: number[], opts?: RequestOptions): Promise<AliasResult<{ deleted: boolean }>[]> {
-    if (ids.length === 0) return []
+    return this.settleAliased(ids, async batch => {
+      const defs = batch.map((_, i) => `$id${i}: Int!`).join(', ')
+      const fields = batch.map((_, i) => `d${i}: DeleteMediaListEntry(id: $id${i}) { deleted }`)
+      const variables = Object.fromEntries(batch.map((id, i) => [`id${i}`, id]))
 
-    const defs = ids.map((_, i) => `$id${i}: Int!`).join(', ')
-    const fields = ids.map((_, i) => `d${i}: DeleteMediaListEntry(id: $id${i}) { deleted }`).join('\n')
-    const variables = Object.fromEntries(ids.map((id, i) => [`id${i}`, id]))
-
-    const body = await this.exchange<Record<string, { deleted: boolean } | null>>(
-      `mutation (${defs}) { ${fields} }`,
-      variables,
-      opts
-    )
-    return splitAliases(body, ids.map((_, i) => `d${i}`))
+      const { query, aliasLines } = aliasedDocument('mutation', defs, fields)
+      const body = await this.exchange<Record<string, { deleted: boolean } | null>>(query, variables, opts)
+      return splitAliases(body, batch.map((_, i) => `d${i}`), aliasLines)
+    })
   }
 
   /**
@@ -380,41 +430,17 @@ export class AniListClient {
    * viewer-scoped, so the caller learns the current list status for free.
    */
   async getMediaRelations(mediaIds: number[], opts?: RequestOptions): Promise<RelationLookupResult[]> {
-    if (mediaIds.length === 0) return []
+    const results = await this.settleAliased(mediaIds, async batch => {
+      const defs = batch.map((_, i) => `$id${i}: Int`).join(', ')
+      const fields = batch.map((_, i) => `m${i}: Media(id: $id${i}) { ${RELATION_FIELDS} }`)
+      const variables = Object.fromEntries(batch.map((id, i) => [`id${i}`, id]))
 
-    const varDefs = mediaIds.map((_, i) => `$id${i}: Int`).join(', ')
-    const aliases = mediaIds.map((_, i) => `
-      m${i}: Media(id: $id${i}) {
-        id
-        relations {
-          edges {
-            relationType
-            node {
-              id
-              type
-              format
-              status
-              episodes
-              chapters
-              isAdult
-              title { userPreferred romaji }
-              coverImage { medium color }
-              startDate { year }
-              mediaListEntry { id status progress }
-            }
-          }
-        }
-      }
-    `).join('\n')
-
-    const variables = Object.fromEntries(mediaIds.map((id, i) => [`id${i}`, id]))
-    const body = await this.exchange<Record<string, RelationLookupResult | null>>(
-      `query (${varDefs}) { ${aliases} }`,
-      variables,
-      { retryTransient: true, ...opts }
-    )
-    // A missing/private media id nulls its alias; skip it rather than fail the round
-    return Object.values(body.data ?? {}).filter((m): m is RelationLookupResult => m !== null)
+      const { query, aliasLines } = aliasedDocument('query', defs, fields)
+      const body = await this.exchange<Record<string, RelationLookupResult | null>>(query, variables, { retryTransient: true, ...opts })
+      return splitAliases(body, batch.map((_, i) => `m${i}`), aliasLines)
+    })
+    // A missing/private media id is blamed and dropped; the rest still resolve
+    return results.flatMap(r => (r.ok ? [r.data] : []))
   }
 
   async searchMedia(

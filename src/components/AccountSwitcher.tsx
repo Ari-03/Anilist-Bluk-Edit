@@ -7,20 +7,12 @@ import { useStore } from '@/store'
 import TokenLoginForm from '@/components/TokenLoginForm'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
-import { Check, ChevronDown, LogOut, UserPlus, Loader2, X, Info } from 'lucide-react'
+import { Check, ChevronDown, LogOut, UserPlus, Loader2, X, ExternalLink } from 'lucide-react'
 
 export default function AccountSwitcher() {
     const { switchAccount, signOut } = useAuth()
-    const {
-        user,
-        accounts,
-        activeAccountId,
-        isLoadingLists,
-        entrySync,
-        removeAccount,
-        logout,
-        addNotification,
-    } = useStore()
+    const { user, accounts, activeAccountId, isLoadingLists, entrySync, removeAccount, logout, addNotification } =
+        useStore()
 
     const [open, setOpen] = useState(false)
     const [switchingTo, setSwitchingTo] = useState<number | null>(null)
@@ -32,7 +24,7 @@ export default function AccountSwitcher() {
     useEffect(() => setMounted(true), [])
 
     // Block switching while anything is writing to or loading from AniList
-    const busy = isLoadingLists || Object.values(entrySync).some(s => s === 'pending')
+    const busy = isLoadingLists || Object.values(entrySync).some((s) => s === 'pending')
 
     useEffect(() => {
         if (!open) return
@@ -130,7 +122,7 @@ export default function AccountSwitcher() {
                             Accounts
                         </p>
 
-                        {accountList.map(account => {
+                        {accountList.map((account) => {
                             const isActive = account.user.id === activeAccountId
                             const isSwitching = switchingTo === account.user.id
                             return (
@@ -212,46 +204,68 @@ export default function AccountSwitcher() {
             {/* Add-account dialog — portaled to <body>: the header's backdrop-filter
                 would otherwise become the containing block for this fixed overlay,
                 centering it on the header instead of the viewport. */}
-            {mounted && createPortal(
-                <AnimatePresence>
-                    {showAddAccount && (
-                        <m.div
-                            className="fixed inset-0 z-confirm flex items-center justify-center p-4"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.15 }}
-                        >
-                            <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setShowAddAccount(false)} />
+            {mounted &&
+                createPortal(
+                    <AnimatePresence>
+                        {showAddAccount && (
                             <m.div
-                                role="dialog"
-                                aria-modal="true"
-                                className="relative w-full max-w-sm card p-6 shadow-overlay"
-                                initial={{ opacity: 0, scale: 0.95, y: 8 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.97, y: 4 }}
-                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                className="fixed inset-0 z-confirm flex items-center justify-center p-4"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.15 }}
                             >
-                                <div className="flex items-start justify-between mb-4">
-                                    <h3 className="text-base font-semibold text-fg">Add another account</h3>
-                                    <button onClick={() => setShowAddAccount(false)} className="btn-icon w-8 h-8 -mt-1 -mr-1">
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                </div>
-                                <div className="flex items-start gap-2 rounded-lg bg-accent/5 border border-accent/20 p-2.5 mb-4">
-                                    <Info className="w-3.5 h-3.5 text-accent flex-shrink-0 mt-0.5" />
-                                    <p className="text-xs leading-relaxed text-fg-muted">
-                                        Log into the other account on anilist.co first — the OAuth page uses
-                                        whichever AniList account is currently signed in there.
-                                    </p>
-                                </div>
-                                <TokenLoginForm />
+                                <div
+                                    className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+                                    onClick={() => setShowAddAccount(false)}
+                                />
+                                <m.div
+                                    role="dialog"
+                                    aria-modal="true"
+                                    className="relative w-full max-w-sm card p-6 shadow-overlay"
+                                    initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.97, y: 4 }}
+                                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                                >
+                                    <div className="flex items-start justify-between mb-4">
+                                        <h3 className="text-base font-semibold text-fg">Add another account</h3>
+                                        <button
+                                            onClick={() => setShowAddAccount(false)}
+                                            className="btn-icon w-8 h-8 -mt-1 -mr-1"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <div className="space-y-3 mb-4 text-sm text-fg-muted">
+                                        <p>AniList uses the account already signed in on its website.</p>
+                                        <ol className="list-decimal pl-5 space-y-2">
+                                            <li>
+                                                Open AniList, log out from the avatar menu, and sign in to the account
+                                                you want to add.
+                                            </li>
+                                            <li>Return here and connect that account.</li>
+                                        </ol>
+                                        <a
+                                            href="https://anilist.co"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="btn-secondary w-full"
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                            Open AniList to switch accounts
+                                        </a>
+                                        <p className="text-xs text-fg-subtle">
+                                            Your saved accounts stay connected here.
+                                        </p>
+                                    </div>
+                                    <TokenLoginForm addAccount />
+                                </m.div>
                             </m.div>
-                        </m.div>
-                    )}
-                </AnimatePresence>,
-                document.body
-            )}
+                        )}
+                    </AnimatePresence>,
+                    document.body
+                )}
 
             <ConfirmDialog
                 open={confirmSignOutAll}

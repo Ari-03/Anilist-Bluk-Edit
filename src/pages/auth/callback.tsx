@@ -1,36 +1,31 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/router'
-import { useAuth } from '@/contexts/AuthContext'
-import { Loader2, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
+import { useAuth, takeAddAccountIntent, AddAccountIntent, SignInResult } from '@/contexts/AuthContext'
+import { Loader2, CheckCircle, XCircle, ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react'
 
 const AuthCallback: React.FC = () => {
   const router = useRouter()
-  const { signInWithToken } = useAuth()
-  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing')
+  const { signInWithToken, signInWithOAuth } = useAuth()
+  const [status, setStatus] = useState<'processing' | 'success' | 'same-account' | 'error'>('processing')
   const [error, setError] = useState<string>('')
-  const processingRef = useRef(false)
+  // Set when "add another account" came back with the account that was already active
+  const [repeat, setRepeat] = useState<{ name: string; intent: AddAccountIntent } | null>(null)
+  // Reuse the token exchange when Strict Mode subscribes to this effect twice.
+  const signInRequest = useRef<Promise<SignInResult> | null>(null)
 
   useEffect(() => {
-    let isMounted = true // React Strict Mode protection
+    let isMounted = true
+    let redirectTimeout: ReturnType<typeof setTimeout> | undefined
 
     const handleCallback = async () => {
-      // Prevent duplicate processing (race condition and Strict Mode protection)
-      if (processingRef.current) {
-        return
-      }
-      
-      processingRef.current = true
-
       try {
         // Extract access token from URL fragment
         const fragment = window.location.hash.substring(1)
-        
+
         const params = new URLSearchParams(fragment)
         const accessToken = params.get('access_token')
         const error = params.get('error')
         const errorDescription = params.get('error_description')
-        const tokenType = params.get('token_type')
-        const expiresIn = params.get('expires_in')
 
         if (error) {
           if (isMounted) {
@@ -49,16 +44,25 @@ const AuthCallback: React.FC = () => {
         }
 
         // Use the new secure sign-in method
-        const result = await signInWithToken(accessToken)
-        
+        signInRequest.current ??= signInWithToken(accessToken)
+        const result = await signInRequest.current
+
         if (!isMounted) return // Component unmounted during async operation
-        
+
         if (result.success) {
-          setStatus('success')
           // Clear the URL fragment to prevent re-processing
           window.history.replaceState(null, '', window.location.pathname)
+
+          const intent = takeAddAccountIntent()
+          if (intent && intent.fromUserId === result.user.id) {
+            setStatus('same-account')
+            setRepeat({ name: result.user.name, intent })
+            return
+          }
+
+          setStatus('success')
           // Redirect to main app after a brief success message
-          setTimeout(() => {
+          redirectTimeout = setTimeout(() => {
             if (isMounted) {
               router.push('/')
             }
@@ -81,8 +85,7 @@ const AuthCallback: React.FC = () => {
     // Cleanup function for React Strict Mode
     return () => {
       isMounted = false
-      // Reset processing flag if component unmounts during processing
-      processingRef.current = false
+      clearTimeout(redirectTimeout)
     }
   }, [router, signInWithToken])
 
@@ -96,36 +99,62 @@ const AuthCallback: React.FC = () => {
         {status === 'processing' && (
           <>
             <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Authenticating...
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Processing your AniList authentication
-            </p>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Authenticating...</h1>
+            <p className="text-gray-600 dark:text-gray-400">Processing your AniList authentication</p>
           </>
         )}
 
         {status === 'success' && (
           <>
             <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Authentication Successful!</h1>
+            <p className="text-gray-600 dark:text-gray-400">Redirecting to the application...</p>
+          </>
+        )}
+
+        {status === 'same-account' && repeat && (
+          <>
+            <XCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Authentication Successful!
+              Still signed in as {repeat.name}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Redirecting to the application...
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              AniList hands back whichever account is signed in on anilist.co, and that is still {repeat.name}. Sign out
+              there (avatar menu → Logout), log into the other account, then try again.
             </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <a
+                href="https://anilist.co"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open anilist.co
+              </a>
+              <button
+                onClick={() => signInWithOAuth(repeat.intent.clientId, { addAccount: true })}
+                className="inline-flex items-center gap-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2 px-4 rounded-md transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Try again
+              </button>
+              <button
+                onClick={handleRetry}
+                className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:underline font-medium py-2 px-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to app
+              </button>
+            </div>
           </>
         )}
 
         {status === 'error' && (
           <>
             <XCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Authentication Failed
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {error}
-            </p>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Authentication Failed</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
             <button
               onClick={handleRetry}
               className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
