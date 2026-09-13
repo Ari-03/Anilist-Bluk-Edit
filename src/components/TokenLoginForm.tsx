@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils'
 
 /**
  * The OAuth sign-in form, reusable both on the login screen and inside the
- * "add another account" dialog.
+ * "add another account" dialog (`addAccount` lets the callback detect a repeat login).
  */
-export default function TokenLoginForm() {
+export default function TokenLoginForm({ addAccount = false }: { addAccount?: boolean }) {
     const { signInWithOAuth, isLoading } = useAuth()
     const [error, setError] = useState('')
     const [oauthClientId, setOauthClientId] = useState('')
@@ -22,18 +22,14 @@ export default function TokenLoginForm() {
             return
         }
         setError('')
-        signInWithOAuth(oauthClientId.trim() || undefined)
+        signInWithOAuth(oauthClientId.trim() || undefined, { addAccount })
     }
 
     return (
         <div className="space-y-4">
-            <button
-                onClick={handleOAuthLogin}
-                disabled={isLoading}
-                className="btn-primary w-full h-12 text-base"
-            >
+            <button onClick={handleOAuthLogin} disabled={isLoading} className="btn-primary w-full h-12 text-base">
                 <LogIn className="h-5 w-5" />
-                {isLoading ? 'Connecting…' : 'Log in with AniList'}
+                {isLoading ? 'Connecting…' : addAccount ? 'Connect this account' : 'Log in with AniList'}
             </button>
 
             {!hasConfiguredClientId && (
@@ -64,8 +60,9 @@ export default function TokenLoginForm() {
                                     className="text-accent hover:underline"
                                 >
                                     AniList Developer settings
-                                </a>
-                                {' '}with redirect URL set to this app&apos;s <code className="text-fg-muted">/auth/callback</code>.
+                                </a>{' '}
+                                with redirect URL set to this app&apos;s{' '}
+                                <code className="text-fg-muted">/auth/callback</code>.
                             </p>
                         </div>
                     )}

@@ -1,13 +1,15 @@
 import { MediaList, MediaListStatus, MediaType } from '@/types/anilist'
 import { getStatusLabel } from '@/lib/anilist'
 import { ScoreRange } from '@/lib/scoreFormat'
+import { cn } from '@/lib/utils'
 import { Check, X } from 'lucide-react'
 
+/** Raw field text; parsed and validated on save so a half-typed value never snaps to 0 */
 export interface QuickEditValues {
     status?: MediaListStatus
-    score?: number
-    progress?: number
-    notes?: string
+    score: string
+    progress: string
+    notes: string
 }
 
 interface QuickEditFormProps {
@@ -20,6 +22,8 @@ interface QuickEditFormProps {
     currentType: MediaType
     layout?: 'stacked' | 'row'
     busy?: boolean
+    /** Validation message for the field that failed, if any */
+    error?: { field: 'score' | 'progress'; message: string } | null
 }
 
 export default function QuickEditForm({
@@ -32,6 +36,7 @@ export default function QuickEditForm({
     currentType,
     layout = 'stacked',
     busy = false,
+    error = null,
 }: QuickEditFormProps) {
     const maxProgress = entry.media?.episodes || entry.media?.chapters || 9999
 
@@ -55,23 +60,27 @@ export default function QuickEditForm({
                 <label className="block text-xs font-medium text-fg-muted mb-1">Score</label>
                 <input
                     type="number"
-                    value={values.score ?? ''}
-                    onChange={(e) => onChange({ ...values, score: parseFloat(e.target.value) || 0 })}
+                    inputMode="decimal"
+                    value={values.score}
+                    onChange={(e) => onChange({ ...values, score: e.target.value })}
                     min={scoreRange.min}
                     max={scoreRange.max}
                     step={scoreRange.step}
-                    className="input h-8 text-xs"
+                    aria-invalid={error?.field === 'score'}
+                    className={cn('input h-8 text-xs', error?.field === 'score' && 'border-danger')}
                 />
             </div>
             <div>
                 <label className="block text-xs font-medium text-fg-muted mb-1">Progress</label>
                 <input
                     type="number"
-                    value={values.progress ?? ''}
-                    onChange={(e) => onChange({ ...values, progress: parseInt(e.target.value) || 0 })}
+                    inputMode="numeric"
+                    value={values.progress}
+                    onChange={(e) => onChange({ ...values, progress: e.target.value })}
                     min={0}
                     max={maxProgress}
-                    className="input h-8 text-xs"
+                    aria-invalid={error?.field === 'progress'}
+                    className={cn('input h-8 text-xs', error?.field === 'progress' && 'border-danger')}
                 />
             </div>
             {layout === 'row' && (
@@ -79,7 +88,7 @@ export default function QuickEditForm({
                     <label className="block text-xs font-medium text-fg-muted mb-1">Notes</label>
                     <input
                         type="text"
-                        value={values.notes || ''}
+                        value={values.notes}
                         onChange={(e) => onChange({ ...values, notes: e.target.value })}
                         className="input h-8 text-xs"
                     />
@@ -93,6 +102,7 @@ export default function QuickEditForm({
             <div className={layout === 'row' ? 'grid grid-cols-2 lg:grid-cols-4 gap-2' : 'space-y-2'}>
                 {fields}
             </div>
+            {error && <p className="text-[11px] text-danger leading-snug">{error.message}</p>}
             <div className="flex justify-end gap-1">
                 <button
                     onClick={onSave}

@@ -1,5 +1,4 @@
 import { AniListClient, RelationMediaNode } from '@/lib/anilist'
-import { RateLimiter } from '@/lib/rateLimiter'
 import { MediaType } from '@/types/anilist'
 
 export interface DiscoveredRelation {
@@ -17,13 +16,13 @@ export interface DiscoveryProgress {
 
 interface DiscoverOptions {
     client: AniListClient
-    rateLimiter: RateLimiter
     seedMediaIds: number[]
     mediaType: MediaType
     maxDepth?: number
     maxNodes?: number
     onProgress?: (progress: DiscoveryProgress) => void
-    isCancelled?: () => boolean
+    /** Aborting stops the walk at the next request boundary */
+    signal?: AbortSignal
 }
 
 const IDS_PER_REQUEST = 12
@@ -38,31 +37,30 @@ const chunk = <T,>(arr: T[], size: number): T[][] =>
  * entries. Each round batch-fetches relations for the frontier; cycles and
  * diamond paths are killed by the visited set. All formats are traversed
  * (chains sometimes route TV → Special → TV) — display filtering is the
- * caller's concern.
+ * caller's concern. Pacing is the client's job, so there is no throttling here.
  */
 export async function discoverRelations({
     client,
-    rateLimiter,
     seedMediaIds,
     mediaType,
     maxDepth = 5,
     maxNodes = 100,
     onProgress,
-    isCancelled,
+    signal,
 }: DiscoverOptions): Promise<DiscoveredRelation[]> {
     const visited = new Set<number>(seedMediaIds)
     const discovered = new Map<number, DiscoveredRelation>()
     let frontier = [...seedMediaIds]
 
     for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth++) {
-        if (isCancelled?.() || discovered.size >= maxNodes) break
+        if (signal?.aborted || discovered.size >= maxNodes) break
 
         const nextFrontier: number[] = []
 
         for (const ids of chunk(frontier, IDS_PER_REQUEST)) {
-            if (isCancelled?.() || discovered.size >= maxNodes) break
+            if (signal?.aborted || discovered.size >= maxNodes) break
 
-            const results = await rateLimiter.execute(() => client.getMediaRelations(ids))
+            const results = await client.getMediaRelations(ids, { signal })
 
             for (const media of results) {
                 for (const edge of media.relations?.edges || []) {

@@ -1,21 +1,47 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { User } from '@/types/anilist'
 
+/** Outcome of validating a token; carries the resolved AniList user on success */
+export type SignInResult = { success: true; user: User } | { success: false; error: string }
+
 interface AuthContextType {
   user: User | null
   accessToken: string | null
   isLoading: boolean
   isAuthenticated: boolean
   tokenExpiresAt: Date | null
-  signIn: (token: string) => Promise<{ success: boolean; error?: string }>
-  signInWithToken: (token: string) => Promise<{ success: boolean; error?: string }>
-  signInWithOAuth: (clientId?: string) => void
-  switchAccount: (token: string) => Promise<{ success: boolean; error?: string }>
+  signIn: (token: string) => Promise<SignInResult>
+  signInWithToken: (token: string) => Promise<SignInResult>
+  signInWithOAuth: (clientId?: string, options?: { addAccount?: boolean }) => void
+  switchAccount: (token: string) => Promise<SignInResult>
   signOut: () => void
   refreshSession: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+// "Add another account" is remembered across the round-trip through anilist.co so the
+// callback can tell when AniList handed back the account that was already signed in.
+// AniList's OAuth page authorizes whichever account is logged in there and offers no
+// way to force a fresh login, so this is the only place the repeat can be caught.
+const ADD_ACCOUNT_KEY = 'anilist_add_account_intent'
+
+export interface AddAccountIntent {
+  fromUserId: number
+  clientId?: string
+}
+
+/** Reads and clears the pending add-account intent, if any */
+export function takeAddAccountIntent(): AddAccountIntent | null {
+  const raw = sessionStorage.getItem(ADD_ACCOUNT_KEY)
+  sessionStorage.removeItem(ADD_ACCOUNT_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as AddAccountIntent
+  } catch {
+    return null
+  }
+}
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -134,12 +160,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [user, accessToken]) 
 
   // Legacy method for backward compatibility
-  const signIn = async (token: string): Promise<{ success: boolean; error?: string }> => {
+  const signIn = async (token: string): Promise<SignInResult> => {
     return signInWithToken(token)
   }
 
   // Secure token authentication with cookie storage
-  const signInWithToken = useCallback(async (token: string): Promise<{ success: boolean; error?: string }> => {
+  const signInWithToken = useCallback(async (token: string): Promise<SignInResult> => {
     // Create more specific request key that includes timestamp to avoid long-term blocking
     const requestKey = `signin_${token.substring(0, 10)}_${Date.now()}`
     const generalKey = `signin_${token.substring(0, 10)}`
@@ -202,7 +228,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setIsLoading(false)
       
-      return { success: true }
+      return { success: true, user: data.user }
     } catch (error) {
       console.error('Sign in error:', error)
       setIsLoading(false)
@@ -216,8 +242,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [])
 
-  // OAuth flow initiation
-  const signInWithOAuth = (clientId?: string) => {
+  // OAuth flow initiation. With `addAccount`, the current user is remembered so the
+  // callback can detect AniList handing back the same account (see takeAddAccountIntent).
+  const signInWithOAuth = (clientId?: string, options?: { addAccount?: boolean }) => {
     const actualClientId = clientId || process.env.NEXT_PUBLIC_ANILIST_CLIENT_ID
     
     if (!actualClientId) {
@@ -225,22 +252,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return
     }
 
-    // Build the authorization URL with only required parameters
-    // Note: redirect_uri is not needed for AniList implicit flow - it uses the one configured in your app settings
+    if (options?.addAccount && user) {
+      const intent: AddAccountIntent = { fromUserId: user.id, clientId }
+      sessionStorage.setItem(ADD_ACCOUNT_KEY, JSON.stringify(intent))
+    } else {
+      sessionStorage.removeItem(ADD_ACCOUNT_KEY)
+    }
+
+    // redirect_uri is not needed for AniList's implicit flow; it uses the one configured in the app settings
     const params = new URLSearchParams({
       client_id: actualClientId,
       response_type: 'token'
     })
-    
-    const authUrl = `https://anilist.co/api/v2/oauth/authorize?${params.toString()}`
-    
-    
-    window.location.href = authUrl
+    window.location.href = `https://anilist.co/api/v2/oauth/authorize?${params.toString()}`
   }
 
   // Switch to a saved account by re-validating its token through the normal
   // sign-in path (re-mints the session cookie, refreshes the profile)
-  const switchAccount = useCallback(async (token: string): Promise<{ success: boolean; error?: string }> => {
+  const switchAccount = useCallback(async (token: string): Promise<SignInResult> => {
     // The recent-validation flag belongs to the previous account
     sessionStorage.removeItem('last_token_validation')
     return signInWithToken(token)

@@ -8,162 +8,109 @@ interface SessionData {
   expiresAt: string
 }
 
+const COOKIE = 'anilist_session'
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  path: '/',
+}
+
+const encode = (session: SessionData) => Buffer.from(JSON.stringify(session)).toString('base64')
+
+/**
+ * Restores the session cookie and re-validates it against AniList.
+ *
+ * Only a definitive auth failure (HTTP 401, or a GraphQL "Invalid token")
+ * clears the cookie. Rate limits, outages, timeouts and HTML error pages fall
+ * back to the cached session with `stale: true` — a transient API problem must
+ * never log the user out.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  const cookies = parse(req.headers.cookie || '')
+  const sessionToken = cookies[COOKIE]
+
+  if (!sessionToken) {
+    return res.status(401).json({ error: 'No session found' })
+  }
+
+  let session: SessionData
   try {
-    const cookies = parse(req.headers.cookie || '')
-    const sessionToken = cookies.anilist_session
+    session = JSON.parse(Buffer.from(sessionToken, 'base64').toString('utf-8'))
+  } catch {
+    return res.status(401).json({ error: 'Invalid session' })
+  }
 
-    if (!sessionToken) {
-      return res.status(401).json({ error: 'No session found' })
-    }
+  const clearAndReject = (error: string, details?: unknown) => {
+    res.setHeader('Set-Cookie', serialize(COOKIE, '', { ...cookieOptions, expires: new Date(0) }))
+    return res.status(401).json({ error, details })
+  }
 
-    // Decode the session data (in production, this should be encrypted/signed)
-    let sessionData: SessionData
+  const respondStale = () => res.status(200).json({ ...session, stale: true })
+
+  if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+    return clearAndReject('Session expired')
+  }
+
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+    const response = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${session.accessToken}`,
+      },
+      // Full viewer query: the response refreshes the cached user (incl.
+      // custom list names created after the original sign-in)
+      body: JSON.stringify({ query: VIEWER_QUERY }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    const text = await response.text()
+    let data: any = null
     try {
-      sessionData = JSON.parse(Buffer.from(sessionToken, 'base64').toString('utf-8'))
-    } catch (error) {
-      // Invalid session data
-      return res.status(401).json({ error: 'Invalid session' })
+      data = JSON.parse(text)
+    } catch {
+      // HTML error page from Cloudflare/nginx (seen on 429s) — not an auth verdict
     }
 
-    // Check if session has expired
-    if (sessionData.expiresAt && new Date(sessionData.expiresAt) < new Date()) {
-      // Clear expired session
-      res.setHeader('Set-Cookie', serialize('anilist_session', '', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: '/',
-        expires: new Date(0)
-      }))
-      return res.status(401).json({ error: 'Session expired' })
+    if (response.status === 401) {
+      return clearAndReject('Invalid token')
     }
 
-    // Validate token is still valid with AniList
-    try {
-      
-      // Create AbortController for timeout
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout for session validation
-      
-      const response = await fetch('https://graphql.anilist.co', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${sessionData.accessToken}`,
-        },
-        body: JSON.stringify({
-          // Full viewer query: the response refreshes the cached user (incl.
-          // custom list names created after the original sign-in)
-          query: VIEWER_QUERY
-        }),
-        signal: controller.signal
-      })
-      
-      clearTimeout(timeoutId)
-
-      // Check if response is successful
-      if (!response.ok) {
-        const responseText = await response.text()
-        console.error('AniList API error in session validation:', responseText)
-        
-        // Clear invalid session
-        res.setHeader('Set-Cookie', serialize('anilist_session', '', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          path: '/',
-          expires: new Date(0)
-        }))
-        return res.status(401).json({ 
-          error: `Session validation failed: ${response.status} ${response.statusText}`,
-          details: responseText.substring(0, 500)
-        })
-      }
-
-      // Check if response is JSON
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await response.text()
-        console.error('Session validation returned non-JSON:', responseText.substring(0, 500))
-        
-        // Clear invalid session
-        res.setHeader('Set-Cookie', serialize('anilist_session', '', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          path: '/',
-          expires: new Date(0)
-        }))
-        return res.status(500).json({ 
-          error: 'Session validation returned non-JSON response',
-          contentType: contentType
-        })
-      }
-
-      const data = await response.json()
-
-      if (data.errors || !data.data?.Viewer) {
-        console.error('Session validation GraphQL errors:', data.errors)
-
-        // Token is invalid, clear session
-        res.setHeader('Set-Cookie', serialize('anilist_session', '', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          path: '/',
-          expires: new Date(0)
-        }))
-        return res.status(401).json({ error: 'Invalid token', details: data.errors })
-      }
-
-      // Re-mint the session with the fresh viewer so profile changes made on
-      // anilist.co (new custom lists, score format, avatar) propagate on load
-      const freshUser = pickSessionUser(data.data.Viewer)
-      const refreshedSession = {
-        user: freshUser,
-        accessToken: sessionData.accessToken,
-        expiresAt: sessionData.expiresAt
-      }
-      res.setHeader('Set-Cookie', serialize(
-        'anilist_session',
-        Buffer.from(JSON.stringify(refreshedSession)).toString('base64'),
-        {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          path: '/',
-          maxAge: 365 * 24 * 60 * 60
-        }
-      ))
-
-      return res.status(200).json(refreshedSession)
-    } catch (error) {
-      console.error('Session validation fetch error:', error)
-
-      // On timeout, fall back to the cached session instead of failing —
-      // stale data beats logging the user out when AniList is slow
-      if (error instanceof Error && error.name === 'AbortError') {
-        return res.status(200).json({
-          user: sessionData.user,
-          accessToken: sessionData.accessToken,
-          expiresAt: sessionData.expiresAt,
-          stale: true
-        })
-      }
-
-      return res.status(500).json({
-        error: 'Failed to validate session',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      })
+    const errors: Array<{ message?: string; status?: number }> = data?.errors ?? []
+    const tokenRejected = errors.some(e => e.status === 401 || /invalid token/i.test(e.message ?? ''))
+    if (tokenRejected) {
+      console.error('Session validation: token rejected', errors)
+      return clearAndReject('Invalid token', errors)
     }
+
+    if (!response.ok || !data?.data?.Viewer) {
+      console.warn(`Session validation degraded (${response.status}), serving cached session:`, text.slice(0, 200))
+      return respondStale()
+    }
+
+    // Re-mint the session with the fresh viewer so profile changes made on
+    // anilist.co (new custom lists, score format, avatar) propagate on load
+    const refreshed: SessionData = {
+      user: pickSessionUser(data.data.Viewer),
+      accessToken: session.accessToken,
+      expiresAt: session.expiresAt,
+    }
+    res.setHeader('Set-Cookie', serialize(COOKIE, encode(refreshed), { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 }))
+    return res.status(200).json(refreshed)
   } catch (error) {
-    console.error('Session validation error:', error)
-    return res.status(500).json({ error: 'Internal server error' })
+    // Timeout or network failure: stale data beats logging the user out
+    console.error('Session validation fetch error:', error)
+    return respondStale()
   }
 }

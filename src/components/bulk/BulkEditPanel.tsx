@@ -3,6 +3,7 @@ import { AnimatePresence, m } from 'framer-motion'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { MediaType } from '@/types/anilist'
+import { parseEditInput } from '@/lib/scoreFormat'
 import { useBulkOperations, BulkFormOptions, EMPTY_BULK_OPTIONS } from '@/hooks/useBulkOperations'
 import BulkActionBar from '@/components/bulk/BulkActionBar'
 import BulkEditForm from '@/components/bulk/BulkEditForm'
@@ -44,6 +45,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
     const selectedCount = selectedEntries.size
     const totalCount = filteredEntries.length
     const allSelected = selectedCount === totalCount && totalCount > 0
+    const inputValid = parseEditInput(options.score, options.progress, user?.mediaListOptions?.scoreFormat).ok
 
     const availableCustomLists = (() => {
         if (!user?.mediaListOptions) return []
@@ -109,9 +111,6 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                                 currentType={currentType}
                                                 availableCustomLists={availableCustomLists}
                                                 disabled={bulk.isBusy}
-                                                rateLimiterConfig={bulk.rateLimiterConfig}
-                                                onRateLimiterConfigChange={bulk.setRateLimiterConfig}
-                                                rateLimiterStats={bulk.rateLimiterStats}
                                             />
                                         </div>
                                         <div className="flex justify-end gap-2 pt-3 border-t border-edge mt-3">
@@ -121,7 +120,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                             </button>
                                             <button
                                                 onClick={handleApply}
-                                                disabled={selectedCount === 0}
+                                                disabled={selectedCount === 0 || !inputValid}
                                                 className="btn-primary h-9 text-sm"
                                             >
                                                 <Save className="w-4 h-4" />
@@ -137,13 +136,13 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                 <BulkProgress
                                     operation={bulk.operation}
                                     progress={bulk.progress}
-                                    stats={bulk.rateLimiterStats}
                                     isCancelling={bulk.isCancelling}
                                     onCancel={bulk.cancel}
                                 />
                             ) : bulk.failedIds.length > 0 ? (
                                 <PartialFailureBar
                                     failedCount={bulk.failedIds.length}
+                                    reason={bulk.failureReason}
                                     onRetry={bulk.retryFailed}
                                     onDismiss={bulk.dismissFailed}
                                 />

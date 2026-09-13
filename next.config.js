@@ -1,16 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    transpilePackages: [
-        'antd',
-        '@ant-design/icons',
-        '@ant-design/icons-svg',
-        'rc-util',
-        'rc-pagination',
-        'rc-picker',
-        'rc-table',
-        'rc-tree'
-    ],
+    // The T3 preview (and anyone typing the IP) opens the dev server as
+    // 127.0.0.1; without this Next 16 blocks HMR and the dev font as cross-origin.
+    allowedDevOrigins: ['127.0.0.1'],
+    // Stop `next dev` from regenerating AGENTS.md / CLAUDE.md on every start
+    agentRules: false,
     images: {
         // ImageKit SDK will handle image optimization
         remotePatterns: [
