@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, m } from 'framer-motion'
 import { Image as IKImage } from '@imagekit/next'
 import { useStore } from '@/store'
-import { AniListClient } from '@/lib/anilist'
+import { AniListClient, EntryUpdates } from '@/lib/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'
 import { MediaList, MediaListStatus, MediaType } from '@/types/anilist'
-import { RateLimiter } from '@/lib/rateLimiter'
 import { discoverRelations, DiscoveredRelation, DiscoveryProgress } from '@/lib/relationDiscovery'
 import { formatMediaFormat } from '@/lib/entryDisplay'
 import ProgressBar from '@/components/ui/ProgressBar'
@@ -59,20 +58,14 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
         setChecked(new Set())
         setTargetStatus(MediaListStatus.COMPLETED)
 
-        const rateLimiter = new RateLimiter({
-            maxRequestsPerSecond: 0.5,
-            maxConcurrentRequests: 1,
-            maxRetries: 3,
-            initialRetryDelay: 2000,
-        })
+        const controller = new AbortController()
 
         discoverRelations({
             client,
-            rateLimiter,
             seedMediaIds: seedEntries.map(e => e.mediaId),
             mediaType: currentType,
             onProgress: setScanProgress,
-            isCancelled: () => cancelRef.current,
+            signal: controller.signal,
         })
             .then(found => {
                 if (cancelRef.current) return
@@ -98,7 +91,7 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
 
         return () => {
             cancelRef.current = true
-            rateLimiter.stop()
+            controller.abort()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open])
@@ -132,15 +125,8 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
         setApplyProgress({ current: 0, total: targets.length, failed: 0 })
         cancelRef.current = false
 
-        const rateLimiter = new RateLimiter({
-            maxRequestsPerSecond: 0.5,
-            maxConcurrentRequests: 1,
-            maxRetries: 3,
-            initialRetryDelay: 2000,
-        })
-
         const entries = targets.map(d => {
-            const updates: Record<string, any> = { status: targetStatus }
+            const updates: EntryUpdates = { status: targetStatus }
             const total = d.media.episodes ?? d.media.chapters
             const existing = d.media.mediaListEntry?.progress || 0
             // Fill progress only when completing and it wouldn't downgrade
@@ -155,8 +141,10 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
         for (const batch of chunk(entries, 10)) {
             if (cancelRef.current) break
             try {
-                await rateLimiter.execute(() => client.bulkSaveMediaListEntries(batch))
-                done += batch.length
+                const results = await client.bulkSaveMediaListEntries(batch)
+                const okCount = results.filter(r => r.ok).length
+                done += okCount
+                failed += batch.length - okCount
             } catch (error) {
                 console.error('Failed to save relation batch:', error)
                 failed += batch.length

@@ -87,7 +87,7 @@ const AuthCallback: React.FC = () => {
   }, [router, signInWithToken])
 
   const handleRetry = () => {
-    router.push('/login')
+    router.push('/')
   }
 
   return (

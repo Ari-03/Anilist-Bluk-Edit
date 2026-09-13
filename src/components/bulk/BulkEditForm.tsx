@@ -1,13 +1,9 @@
-import { useState } from 'react'
 import { MediaListStatus, MediaType, User } from '@/types/anilist'
 import { getStatusLabel } from '@/lib/anilist'
-import { getScoreRange } from '@/lib/scoreFormat'
+import { getScoreRange, parseEditInput } from '@/lib/scoreFormat'
 import { BulkFormOptions } from '@/hooks/useBulkOperations'
-import { RateLimiterStats } from '@/lib/rateLimiter'
-import { RateLimiterConfig } from '@/hooks/useBulkOperations'
 import CustomListsField from '@/components/bulk/CustomListsField'
-import RateLimitSettings from '@/components/bulk/RateLimitSettings'
-import { ChevronDown } from 'lucide-react'
+import PacerStatus from '@/components/bulk/PacerStatus'
 import { cn } from '@/lib/utils'
 
 interface BulkEditFormProps {
@@ -17,9 +13,6 @@ interface BulkEditFormProps {
     currentType: MediaType
     availableCustomLists: string[]
     disabled?: boolean
-    rateLimiterConfig: RateLimiterConfig
-    onRateLimiterConfigChange: (config: RateLimiterConfig) => void
-    rateLimiterStats: RateLimiterStats | null
 }
 
 export default function BulkEditForm({
@@ -29,12 +22,16 @@ export default function BulkEditForm({
     currentType,
     availableCustomLists,
     disabled,
-    rateLimiterConfig,
-    onRateLimiterConfigChange,
-    rateLimiterStats,
 }: BulkEditFormProps) {
-    const [showAdvanced, setShowAdvanced] = useState(false)
-    const scoreRange = getScoreRange(user?.mediaListOptions?.scoreFormat)
+    const scoreFormat = user?.mediaListOptions?.scoreFormat
+    const scoreRange = getScoreRange(scoreFormat)
+    const parsed = parseEditInput(options.score, options.progress, scoreFormat)
+    const invalidField = parsed.ok ? null : parsed.field
+
+    const fieldError = (field: 'score' | 'progress') =>
+        !parsed.ok && parsed.field === field ? (
+            <p className="mt-1 text-[11px] text-danger leading-snug">{parsed.message}</p>
+        ) : null
 
     return (
         <div className="space-y-4">
@@ -60,28 +57,34 @@ export default function BulkEditForm({
                     <label className="block text-xs font-medium text-fg-muted mb-1">Score</label>
                     <input
                         type="number"
+                        inputMode="decimal"
                         value={options.score}
                         onChange={(e) => onChange({ ...options, score: e.target.value })}
                         placeholder="No change"
                         min={scoreRange.min}
                         max={scoreRange.max}
                         step={scoreRange.step}
-                        className="input h-9 text-sm"
+                        aria-invalid={invalidField === 'score'}
+                        className={cn('input h-9 text-sm', invalidField === 'score' && 'border-danger')}
                         disabled={disabled}
                     />
+                    {fieldError('score')}
                 </div>
 
                 <div>
                     <label className="block text-xs font-medium text-fg-muted mb-1">Progress</label>
                     <input
                         type="number"
+                        inputMode="numeric"
                         value={options.progress}
                         onChange={(e) => onChange({ ...options, progress: e.target.value })}
                         placeholder="No change"
                         min={0}
-                        className="input h-9 text-sm"
+                        aria-invalid={invalidField === 'progress'}
+                        className={cn('input h-9 text-sm', invalidField === 'progress' && 'border-danger')}
                         disabled={disabled}
                     />
+                    {fieldError('progress')}
                 </div>
 
                 <div>
@@ -136,24 +139,7 @@ export default function BulkEditForm({
             </div>
 
             <div className="border-t border-edge pt-3">
-                <button
-                    type="button"
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="flex items-center gap-1 text-xs font-medium text-fg-muted hover:text-fg transition-colors"
-                >
-                    <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-150', showAdvanced && 'rotate-180')} />
-                    Advanced · rate limiting
-                </button>
-                {showAdvanced && (
-                    <div className="mt-3">
-                        <RateLimitSettings
-                            config={rateLimiterConfig}
-                            onChange={onRateLimiterConfigChange}
-                            stats={rateLimiterStats}
-                            disabled={disabled}
-                        />
-                    </div>
-                )}
+                <PacerStatus />
             </div>
         </div>
     )

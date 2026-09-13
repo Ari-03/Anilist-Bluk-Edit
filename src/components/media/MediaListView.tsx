@@ -3,13 +3,15 @@ import { AnimatePresence, m } from 'framer-motion'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { MediaList, MediaListStatus, MediaType } from '@/types/anilist'
-import { getScoreRange } from '@/lib/scoreFormat'
+import { getScoreRange, parseEditInput } from '@/lib/scoreFormat'
 import MediaCard from '@/components/media/MediaCard'
 import MediaListRow from '@/components/media/MediaListRow'
 import StatusSection from '@/components/media/StatusSection'
 import QuickEditForm, { QuickEditValues } from '@/components/media/QuickEditForm'
 import EmptyState from '@/components/media/EmptyState'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+
+const EMPTY_EDIT: QuickEditValues = { score: '', progress: '', notes: '' }
 
 // Mirrors the status sort order in the store's applyFilters()
 const STATUS_SECTION_ORDER: MediaListStatus[] = [
@@ -48,7 +50,8 @@ export default function MediaListView({ client }: MediaListViewProps) {
     } = useStore()
 
     const [editingEntry, setEditingEntry] = useState<number | null>(null)
-    const [editValues, setEditValues] = useState<QuickEditValues>({})
+    const [editValues, setEditValues] = useState<QuickEditValues>(EMPTY_EDIT)
+    const [editError, setEditError] = useState<{ field: 'score' | 'progress'; message: string } | null>(null)
     const [savingEdit, setSavingEdit] = useState(false)
     const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null)
     const [deletingSingle, setDeletingSingle] = useState(false)
@@ -58,26 +61,44 @@ export default function MediaListView({ client }: MediaListViewProps) {
     const staggerThisRender = !hasStaggeredRef.current && filteredEntries.length > 0
     if (filteredEntries.length > 0) hasStaggeredRef.current = true
 
-    const scoreRange = getScoreRange(user?.mediaListOptions?.scoreFormat)
+    const scoreFormat = user?.mediaListOptions?.scoreFormat
+    const scoreRange = getScoreRange(scoreFormat)
+
+    const closeEdit = () => {
+        setEditingEntry(null)
+        setEditValues(EMPTY_EDIT)
+        setEditError(null)
+    }
 
     const handleStartEdit = (entry: (typeof filteredEntries)[number]) => {
         setEditingEntry(entry.id)
+        setEditError(null)
         setEditValues({
             status: entry.status,
-            score: entry.score || 0,
-            progress: entry.progress || 0,
+            score: String(entry.score ?? 0),
+            progress: String(entry.progress ?? 0),
             notes: entry.notes || '',
         })
     }
 
-    const handleSaveEdit = async (entryId: number, mediaId: number) => {
+    const handleSaveEdit = async (mediaId: number) => {
         if (!client) return
+        const parsed = parseEditInput(editValues.score, editValues.progress, scoreFormat)
+        if (!parsed.ok) {
+            setEditError({ field: parsed.field, message: parsed.message })
+            return
+        }
+        setEditError(null)
         setSavingEdit(true)
         try {
-            const result = await client.updateMediaListEntry(mediaId, editValues)
+            const result = await client.updateMediaListEntry(mediaId, {
+                status: editValues.status,
+                score: parsed.score,
+                progress: parsed.progress,
+                notes: editValues.notes,
+            })
             mergeMediaListEntries([result])
-            setEditingEntry(null)
-            setEditValues({})
+            closeEdit()
             addNotification({ type: 'success', message: 'Entry updated' })
         } catch (error) {
             console.error('Failed to update entry:', error)
@@ -172,15 +193,13 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                     entry={entry}
                                     values={editValues}
                                     onChange={setEditValues}
-                                    onSave={() => entry.media && handleSaveEdit(entry.id, entry.media.id)}
-                                    onCancel={() => {
-                                        setEditingEntry(null)
-                                        setEditValues({})
-                                    }}
+                                    onSave={() => handleSaveEdit(entry.mediaId)}
+                                    onCancel={closeEdit}
                                     scoreRange={scoreRange}
                                     currentType={currentType}
                                     layout={isGrid ? 'stacked' : 'row'}
                                     busy={savingEdit}
+                                    error={editError}
                                 />
                             ) : undefined
 

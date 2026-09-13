@@ -1,8 +1,11 @@
 import { useRef, useState, useCallback } from 'react'
 import { useStore } from '@/store'
-import { AniListClient } from '@/lib/anilist'
+import { AniListClient, EntryUpdates } from '@/lib/anilist'
+import { errorMessage } from '@/lib/graphql'
+import { isAbortError } from '@/lib/pacer'
+import { parseEditInput } from '@/lib/scoreFormat'
+import { applyCustomListChanges, CustomListAction } from '@/lib/customLists'
 import { MediaList, MediaListStatus } from '@/types/anilist'
-import { RateLimiter, RateLimiterStats } from '@/lib/rateLimiter'
 
 export interface BulkFormOptions {
     status: MediaListStatus | ''
@@ -11,7 +14,7 @@ export interface BulkFormOptions {
     private: string
     hiddenFromStatusLists: string
     notes: string
-    customLists: Record<string, 'add' | 'remove' | null>
+    customLists: Record<string, CustomListAction>
 }
 
 export const EMPTY_BULK_OPTIONS: BulkFormOptions = {
@@ -31,23 +34,14 @@ export interface BulkProgress {
     failed: number
 }
 
-export interface RateLimiterConfig {
-    maxRequestsPerSecond: number
-    maxConcurrentRequests: number
-    maxRetries: number
-    initialRetryDelay: number
-}
-
-const DEFAULT_RATE_CONFIG: RateLimiterConfig = {
-    maxRequestsPerSecond: 0.5,
-    maxConcurrentRequests: 1,
-    maxRetries: 3,
-    initialRetryDelay: 2000
-}
+type Operation = 'update' | 'delete'
 
 type LastOperation =
     | { type: 'update'; options: BulkFormOptions }
     | { type: 'delete' }
+
+/** AniList accepts ~10 aliased mutations per request comfortably */
+const CHUNK_SIZE = 10
 
 const chunk = <T,>(arr: T[], size: number): T[][] =>
     Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
@@ -55,80 +49,174 @@ const chunk = <T,>(arr: T[], size: number): T[][] =>
     )
 
 /**
+ * Per-run bookkeeping: which entries settled, which failed and why, mirrored
+ * into the store's per-entry sync state as it happens.
+ */
+const createLedger = (allIds: number[], report: (progress: BulkProgress) => void) => {
+    const succeeded: number[] = []
+    const failed: number[] = []
+    let reason: string | null = null
+
+    const sync = (ids: number[], state: 'pending' | 'error' | null) => useStore.getState().setEntrySync(ids, state)
+    const publish = () => report({
+        current: succeeded.length + failed.length,
+        total: allIds.length,
+        successful: succeeded.length,
+        failed: failed.length,
+    })
+
+    return {
+        ok(ids: number[]) {
+            if (ids.length === 0) return
+            sync(ids, null)
+            succeeded.push(...ids)
+            publish()
+        },
+        fail(ids: number[], message: string) {
+            if (ids.length === 0) return
+            sync(ids, 'error')
+            failed.push(...ids)
+            reason ??= message
+            publish()
+        },
+        /** Entries never attempted (after Stop) go back to neutral */
+        releaseUnattempted() {
+            const done = new Set([...succeeded, ...failed])
+            sync(allIds.filter(id => !done.has(id)), null)
+        },
+        get succeeded() { return succeeded },
+        get failed() { return failed },
+        get reason() { return reason },
+    }
+}
+
+type Ledger = ReturnType<typeof createLedger>
+
+const buildUpdates = (options: BulkFormOptions, parsed: { score?: number; progress?: number }): EntryUpdates => {
+    const updates: EntryUpdates = {}
+    if (options.status) updates.status = options.status
+    if (parsed.score !== undefined) updates.score = parsed.score
+    if (parsed.progress !== undefined) updates.progress = parsed.progress
+    if (options.private !== '') updates.private = options.private === 'true'
+    if (options.hiddenFromStatusLists !== '') updates.hiddenFromStatusLists = options.hiddenFromStatusLists === 'true'
+    if (options.notes.trim()) updates.notes = options.notes
+    return updates
+}
+
+/** Custom-list path: aliased SaveMediaListEntry, settled per entry */
+const saveChunked = async (
+    client: AniListClient,
+    items: Array<{ id: number; mediaId: number; updates: EntryUpdates }>,
+    ledger: Ledger,
+    signal: AbortSignal
+) => {
+    for (const batch of chunk(items, CHUNK_SIZE)) {
+        let results
+        try {
+            results = await client.bulkSaveMediaListEntries(
+                batch.map(({ mediaId, updates }) => ({ mediaId, updates })),
+                { signal }
+            )
+        } catch (error) {
+            if (isAbortError(error)) throw error
+            console.error('Bulk save chunk failed:', error)
+            ledger.fail(batch.map(b => b.id), errorMessage(error))
+            continue
+        }
+
+        const confirmed = results.flatMap(r => (r.ok ? [r.data] : []))
+        useStore.getState().mergeMediaListEntries(confirmed)
+        ledger.ok(batch.filter((_, i) => results[i].ok).map(b => b.id))
+        results.forEach((r, i) => {
+            if (!r.ok) ledger.fail([batch[i].id], r.message)
+        })
+    }
+}
+
+/**
  * Bulk mutation engine with settled updates: the store is only written after
- * the server confirms each batch, so entries animate to their new positions
- * as confirmations arrive and there is never a full-list refetch.
+ * the server confirms each entry, so cards animate to their new positions as
+ * confirmations arrive and there is never a full-list refetch. Pacing and
+ * retries live in the client; Stop aborts the next wait immediately and lets
+ * the one request in flight land.
  */
 export function useBulkOperations(client: AniListClient | null) {
-    const [operation, setOperation] = useState<'update' | 'delete' | null>(null)
+    const [operation, setOperation] = useState<Operation | null>(null)
     const [progress, setProgress] = useState<BulkProgress>({ current: 0, total: 0, successful: 0, failed: 0 })
-    const [rateLimiterStats, setRateLimiterStats] = useState<RateLimiterStats | null>(null)
-    const [rateLimiterConfig, setRateLimiterConfig] = useState<RateLimiterConfig>(DEFAULT_RATE_CONFIG)
     const [isCancelling, setIsCancelling] = useState(false)
     const [failedIds, setFailedIds] = useState<number[]>([])
+    const [failureReason, setFailureReason] = useState<string | null>(null)
 
-    const rateLimiterRef = useRef<RateLimiter | null>(null)
-    const cancelRef = useRef(false)
+    const abortRef = useRef<AbortController | null>(null)
     const lastOperationRef = useRef<LastOperation | null>(null)
 
     const isProcessing = operation === 'update'
     const isDeleting = operation === 'delete'
     const isBusy = operation !== null
 
-    const buildUpdates = (options: BulkFormOptions) => {
-        const updates: Record<string, any> = {}
-        if (options.status) updates.status = options.status
-        if (options.score) updates.score = parseFloat(options.score)
-        if (options.progress) updates.progress = parseInt(options.progress)
-        if (options.private !== '') updates.private = options.private === 'true'
-        if (options.hiddenFromStatusLists !== '') updates.hiddenFromStatusLists = options.hiddenFromStatusLists === 'true'
-        if (options.notes.trim()) updates.notes = options.notes
-        return updates
+    const startRun = (kind: Operation, entries: MediaList[]) => {
+        const controller = new AbortController()
+        abortRef.current = controller
+        setIsCancelling(false)
+        setOperation(kind)
+        setFailedIds([])
+        setFailureReason(null)
+
+        const allIds = entries.map(e => e.id)
+        useStore.getState().setEntrySync(allIds, 'pending')
+        setProgress({ current: 0, total: allIds.length, successful: 0, failed: 0 })
+        return { ledger: createLedger(allIds, setProgress), signal: controller.signal }
     }
 
-    const finishRun = (
-        kind: 'update' | 'delete',
-        succeededIds: number[],
-        failed: number[],
-        stats: RateLimiterStats | null
-    ) => {
+    const finishRun = (kind: Operation, ledger: Ledger) => {
         const store = useStore.getState()
+        ledger.releaseUnattempted()
 
-        if (succeededIds.length > 0) {
+        if (ledger.succeeded.length > 0) {
             // Local state now reflects confirmed server state; keep the
             // freshness window open so nothing schedules a clobbering refetch.
             store.setLastDataLoad(Date.now())
-            store.deselectEntries(succeededIds)
+            store.deselectEntries(ledger.succeeded)
         }
 
-        setFailedIds(failed)
+        setFailedIds(ledger.failed)
+        setFailureReason(ledger.reason)
 
         const verb = kind === 'update' ? 'updated' : 'deleted'
-        if (failed.length === 0) {
+        const count = ledger.succeeded.length
+        if (ledger.failed.length === 0) {
             store.addNotification({
-                type: succeededIds.length > 0 ? 'success' : 'error',
-                message: succeededIds.length > 0
-                    ? `${succeededIds.length} ${succeededIds.length === 1 ? 'entry' : 'entries'} ${verb}`
+                type: count > 0 ? 'success' : 'error',
+                message: count > 0
+                    ? `${count} ${count === 1 ? 'entry' : 'entries'} ${verb}`
                     : `No entries were ${verb}`
             })
         } else {
             store.addNotification({
                 type: 'warning',
-                message: `${succeededIds.length} ${verb}, ${failed.length} failed — failed entries stay selected for retry`
+                message: `${count} ${verb}, ${ledger.failed.length} failed — failed entries stay selected for retry`
             })
         }
 
-        if (stats) setRateLimiterStats(stats)
+        abortRef.current = null
+        setOperation(null)
+        setIsCancelling(false)
     }
 
     const runBulkUpdate = useCallback(async (options: BulkFormOptions, entriesOverride?: MediaList[]) => {
         if (!client || isBusy) return
 
-        const updates = buildUpdates(options)
+        const store = useStore.getState()
+        const parsed = parseEditInput(options.score, options.progress, store.user?.mediaListOptions?.scoreFormat)
+        if (!parsed.ok) {
+            store.addNotification({ type: 'error', message: parsed.message })
+            return
+        }
+
+        const updates = buildUpdates(options, parsed)
         const customListChanges = options.customLists
         const hasCustomListChanges = Object.values(customListChanges).some(v => v === 'add' || v === 'remove')
 
-        const store = useStore.getState()
         if (Object.keys(updates).length === 0 && !hasCustomListChanges) {
             store.addNotification({ type: 'warning', message: 'Pick at least one field to change' })
             return
@@ -158,169 +246,79 @@ export function useBulkOperations(client: AniListClient | null) {
         }
 
         lastOperationRef.current = { type: 'update', options }
-        cancelRef.current = false
-        setIsCancelling(false)
-        setOperation('update')
-        setFailedIds([])
-        setProgress({ current: 0, total: entries.length, successful: 0, failed: 0 })
-        rateLimiterRef.current = new RateLimiter(rateLimiterConfig)
-
-        const allIds = entries.map(e => e.id)
-        store.setEntrySync(allIds, 'pending')
-
-        const succeededIds: number[] = []
-        const failed: number[] = []
-
-        const runChunked = async (
-            entriesToUpdate: Array<{ id: number; mediaId: number; updates: any }>
-        ) => {
-            for (const chunkItems of chunk(entriesToUpdate, 10)) {
-                if (cancelRef.current) {
-                    // Entries never attempted: release their pending state
-                    const remaining = entriesToUpdate
-                        .filter(e => !succeededIds.includes(e.id) && !failed.includes(e.id))
-                        .map(e => e.id)
-                    useStore.getState().setEntrySync(remaining, null)
-                    break
-                }
-                const chunkIds = chunkItems.map(e => e.id)
-                try {
-                    const results = await rateLimiterRef.current!.execute(() =>
-                        client.bulkSaveMediaListEntries(chunkItems.map(({ mediaId, updates }) => ({ mediaId, updates })))
-                    )
-                    // Settle this chunk: merge confirmed results, release pending —
-                    // cards animate to their new spots as each batch lands.
-                    useStore.getState().mergeMediaListEntries(results as Array<Partial<MediaList> & { id: number }>)
-                    useStore.getState().setEntrySync(chunkIds, null)
-                    succeededIds.push(...chunkIds)
-                } catch (error: any) {
-                    console.error('Bulk update chunk failed:', error)
-                    useStore.getState().setEntrySync(chunkIds, 'error')
-                    failed.push(...chunkIds)
-                }
-                setProgress({
-                    current: succeededIds.length + failed.length,
-                    total: entries.length,
-                    successful: succeededIds.length,
-                    failed: failed.length
-                })
-                if (rateLimiterRef.current) setRateLimiterStats(rateLimiterRef.current.getStats())
-            }
-        }
+        const { ledger, signal } = startRun('update', entries)
 
         try {
             if (!hasCustomListChanges) {
-                // Fast path: one UpdateMediaListEntries call for the whole selection
+                // Fast path: one UpdateMediaListEntries call for the whole selection.
+                // AniList drops IDs it did not update, so only confirmed IDs settle.
+                const allIds = entries.map(e => e.id)
                 try {
-                    const results = await rateLimiterRef.current.execute(() =>
-                        client.updateMediaListEntries(allIds, updates)
-                    )
-                    useStore.getState().mergeMediaListEntries(results as Array<Partial<MediaList> & { id: number }>)
-                    useStore.getState().setEntrySync(allIds, null)
-                    succeededIds.push(...allIds)
-                    setProgress({ current: entries.length, total: entries.length, successful: entries.length, failed: 0 })
+                    const results = await client.updateMediaListEntries(allIds, updates, { signal })
+                    const returned = new Set(results.map(r => r.id))
+                    useStore.getState().mergeMediaListEntries(results)
+                    ledger.ok(allIds.filter(id => returned.has(id)))
+                    ledger.fail(allIds.filter(id => !returned.has(id)), 'AniList did not confirm this entry')
                 } catch (error) {
-                    console.error('UpdateMediaListEntries failed, falling back to chunked saves:', error)
-                    await runChunked(entries.map(entry => ({ id: entry.id, mediaId: entry.mediaId, updates })))
+                    if (isAbortError(error)) throw error
+                    console.error('UpdateMediaListEntries failed, falling back to per-entry saves:', error)
+                    await saveChunked(client, entries.map(entry => ({ id: entry.id, mediaId: entry.mediaId, updates })), ledger, signal)
                 }
             } else {
-                // Custom-list path: reconstruct each entry's full membership
-                // (customLists is a full-replacement array on AniList's side)
-                const entriesToUpdate = entries.map(entry => {
-                    const entryUpdates = { ...updates }
-                    const currentCustomLists = Object.keys(entry.customLists || {}).filter(
-                        listName => entry.customLists && entry.customLists[listName]
-                    )
-                    const listsToAdd = Object.entries(customListChanges)
-                        .filter(([, v]) => v === 'add')
-                        .map(([k]) => k)
-                    const listsToRemove = new Set(
-                        Object.entries(customListChanges)
-                            .filter(([, v]) => v === 'remove')
-                            .map(([k]) => k)
-                    )
-                    let finalCustomLists = currentCustomLists.filter(list => !listsToRemove.has(list))
-                    finalCustomLists = Array.from(new Set([...finalCustomLists, ...listsToAdd]))
-                    entryUpdates.customLists = finalCustomLists
-                    return { id: entry.id, mediaId: entry.mediaId, updates: entryUpdates }
-                })
-                await runChunked(entriesToUpdate)
+                await saveChunked(
+                    client,
+                    entries.map(entry => ({
+                        id: entry.id,
+                        mediaId: entry.mediaId,
+                        updates: { ...updates, customLists: applyCustomListChanges(entry.customLists, customListChanges) },
+                    })),
+                    ledger,
+                    signal
+                )
             }
-
-            finishRun('update', succeededIds, failed, rateLimiterRef.current?.getStats() ?? null)
-        } catch (error: any) {
-            console.error('Bulk update failed:', error)
-            useStore.getState().setEntrySync(allIds.filter(id => !succeededIds.includes(id)), 'error')
-            useStore.getState().addNotification({
-                type: 'error',
-                message: `Bulk update failed. ${error.message || 'Please try again.'}`
-            })
+        } catch (error) {
+            if (!isAbortError(error)) console.error('Bulk update failed:', error)
         } finally {
-            setOperation(null)
-            setIsCancelling(false)
+            finishRun('update', ledger)
         }
-    }, [client, isBusy, rateLimiterConfig])
+    }, [client, isBusy])
 
     const runBulkDelete = useCallback(async (entriesOverride?: MediaList[]) => {
         if (!client || isBusy) return
 
-        const store = useStore.getState()
-        const entries = entriesOverride ?? store.getSelectedEntries()
+        const entries = entriesOverride ?? useStore.getState().getSelectedEntries()
         if (entries.length === 0) return
 
         lastOperationRef.current = { type: 'delete' }
-        cancelRef.current = false
-        setIsCancelling(false)
-        setOperation('delete')
-        setFailedIds([])
-        setProgress({ current: 0, total: entries.length, successful: 0, failed: 0 })
-        rateLimiterRef.current = new RateLimiter(rateLimiterConfig)
-
-        const allIds = entries.map(e => e.id)
-        store.setEntrySync(allIds, 'pending')
-
-        const succeededIds: number[] = []
-        const failed: number[] = []
+        const { ledger, signal } = startRun('delete', entries)
 
         try {
-            for (const entry of entries) {
-                if (cancelRef.current) {
-                    const remaining = allIds.filter(id => !succeededIds.includes(id) && !failed.includes(id))
-                    useStore.getState().setEntrySync(remaining, null)
-                    break
-                }
+            for (const batch of chunk(entries.map(e => e.id), CHUNK_SIZE)) {
+                let results
                 try {
-                    await rateLimiterRef.current.execute(() => client.deleteMediaListEntry(entry.id))
-                    // Confirmed gone on the server: remove locally (card animates out)
-                    useStore.getState().setEntrySync([entry.id], null)
-                    useStore.getState().removeMediaListEntry(entry.id)
-                    succeededIds.push(entry.id)
+                    results = await client.bulkDeleteMediaListEntries(batch, { signal })
                 } catch (error) {
-                    console.error(`Failed to delete entry ${entry.id}:`, error)
-                    useStore.getState().setEntrySync([entry.id], 'error')
-                    failed.push(entry.id)
+                    if (isAbortError(error)) throw error
+                    console.error('Bulk delete chunk failed:', error)
+                    ledger.fail(batch, errorMessage(error))
+                    continue
                 }
-                setProgress({
-                    current: succeededIds.length + failed.length,
-                    total: entries.length,
-                    successful: succeededIds.length,
-                    failed: failed.length
-                })
-                if (rateLimiterRef.current) setRateLimiterStats(rateLimiterRef.current.getStats())
-            }
 
-            finishRun('delete', succeededIds, failed, rateLimiterRef.current?.getStats() ?? null)
-        } catch (error: any) {
-            console.error('Bulk delete failed:', error)
-            useStore.getState().addNotification({
-                type: 'error',
-                message: `Bulk delete failed. ${error.message || 'Please try again.'}`
-            })
+                // An entry that is already gone (e.g. on retry) counts as deleted
+                const gone = batch.filter((_, i) => results[i].ok || /not found/i.test(results[i].ok ? '' : results[i].message))
+                useStore.getState().removeMediaListEntries(gone)
+                ledger.ok(gone)
+                const goneSet = new Set(gone)
+                results.forEach((r, i) => {
+                    if (!r.ok && !goneSet.has(batch[i])) ledger.fail([batch[i]], r.message)
+                })
+            }
+        } catch (error) {
+            if (!isAbortError(error)) console.error('Bulk delete failed:', error)
         } finally {
-            setOperation(null)
-            setIsCancelling(false)
+            finishRun('delete', ledger)
         }
-    }, [client, isBusy, rateLimiterConfig])
+    }, [client, isBusy])
 
     const retryFailed = useCallback(() => {
         const last = lastOperationRef.current
@@ -331,6 +329,7 @@ export function useBulkOperations(client: AniListClient | null) {
         const entries = [...store.animeLists, ...store.mangaLists].filter(e => failedSet.has(e.id))
         store.setEntrySync(failedIds, null)
         setFailedIds([])
+        setFailureReason(null)
 
         if (last.type === 'update') {
             runBulkUpdate(last.options, entries)
@@ -342,16 +341,16 @@ export function useBulkOperations(client: AniListClient | null) {
     const dismissFailed = useCallback(() => {
         useStore.getState().setEntrySync(failedIds, null)
         setFailedIds([])
+        setFailureReason(null)
     }, [failedIds])
 
     const cancel = useCallback(() => {
-        if (!operation) return
-        cancelRef.current = true
+        if (!operation || !abortRef.current) return
         setIsCancelling(true)
-        rateLimiterRef.current?.stop()
+        abortRef.current.abort()
         useStore.getState().addNotification({
             type: 'info',
-            message: 'Cancelling — the current batch will finish first'
+            message: 'Stopping — the request already in flight will finish first'
         })
     }, [operation])
 
@@ -363,9 +362,7 @@ export function useBulkOperations(client: AniListClient | null) {
         isCancelling,
         progress,
         failedIds,
-        rateLimiterStats,
-        rateLimiterConfig,
-        setRateLimiterConfig,
+        failureReason,
         runBulkUpdate,
         runBulkDelete,
         retryFailed,
