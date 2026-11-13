@@ -192,7 +192,9 @@ export default function MediaListView({ client }: MediaListViewProps) {
     const animateLayout = filteredEntries.length <= LAYOUT_ANIMATION_LIMIT
     const selectionActive = bulkEditMode && selectedEntries.size > 0
 
-    const renderEntries = (entries: MediaList[]) => (
+    // `offset` is the section's position in the whole list, so the stagger
+    // budget covers the first screenful overall rather than each section
+    const renderEntries = (entries: MediaList[], offset = 0) => (
         <div className={containerClass}>
             <AnimatePresence mode="popLayout">
                 {entries.map((entry, index) => {
@@ -240,7 +242,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                     scale: 1,
                                     transition: {
                                         duration: 0.25,
-                                        delay: staggerThisRender && index < STAGGER_LIMIT ? index * 0.02 : 0,
+                                        delay: staggerThisRender && offset + index < STAGGER_LIMIT ? (offset + index) * 0.02 : 0,
                                     },
                                 }}
                                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.18 } }}
@@ -258,8 +260,9 @@ export default function MediaListView({ client }: MediaListViewProps) {
         <>
             {showSections ? (
                 <div className="space-y-4">
-                    {orderedStatuses.map((status) => {
+                    {orderedStatuses.map((status, i) => {
                         const entries = statusGroups.get(status)!
+                        const offset = orderedStatuses.slice(0, i).reduce((n, s) => n + statusGroups.get(s)!.length, 0)
                         const sectionSelected = entries.reduce(
                             (n, entry) => n + (selectedEntries.has(entry.id) ? 1 : 0),
                             0
@@ -277,7 +280,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                 onSelectSection={() => selectEntries(entries.map(e => e.id))}
                                 onDeselectSection={() => deselectEntries(entries.map(e => e.id))}
                             >
-                                {renderEntries(entries)}
+                                {renderEntries(entries, offset)}
                             </StatusSection>
                         )
                     })}

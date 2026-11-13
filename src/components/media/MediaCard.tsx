@@ -52,7 +52,7 @@ export default function MediaCard({
     return (
         <div
             className={cn(
-                'group relative card overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-8px_var(--glow,rgb(0_0_0/0.35))]',
+                'group relative card overflow-hidden transition-all duration-200 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:shadow-[0_10px_28px_-8px_var(--glow,rgb(0_0_0/0.35))]',
                 bulkEditMode && 'cursor-pointer',
                 selected && 'ring-2 ring-purple ring-offset-2 ring-offset-page shadow-raised',
                 selectionActive && !selected && !syncState && 'opacity-60 saturate-50 hover:opacity-100 hover:saturate-100',
@@ -146,7 +146,7 @@ export default function MediaCard({
                 {/* Hover actions */}
                 {!bulkEditMode && !editForm && (
                     /* Hover-revealed on pointer devices; always shown on touch, and when focused */
-                    <div className="absolute top-9 right-2 flex flex-col gap-1 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0 [@media(hover:none)]:opacity-100 [@media(hover:none)]:translate-x-0 transition-all duration-150">
+                    <div className="absolute top-9 right-2 flex flex-col gap-1 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0 [@media(hover:none)]:opacity-100 [@media(hover:none)]:translate-x-0 transition-all duration-150 motion-reduce:transition-none motion-reduce:translate-x-0">
                         <button
                             onClick={onStartEdit}
                             className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center hover:bg-accent transition-colors"
