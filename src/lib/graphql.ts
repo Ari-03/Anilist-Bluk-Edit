@@ -75,6 +75,9 @@ export class AniListRequestError extends Error {
     }
 }
 
+/** AniList's answer when deleting an entry that no longer exists */
+export const isAlreadyDeleted = (message: string): boolean => /not found|selected id is invalid/i.test(message)
+
 export const errorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : String(error)
 

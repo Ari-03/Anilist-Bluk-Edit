@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { useStore } from '@/store'
 import { AniListClient, EntryUpdates, getStatusLabel } from '@/lib/anilist'
-import { errorMessage } from '@/lib/graphql'
+import { errorMessage, isAlreadyDeleted } from '@/lib/graphql'
 import { isAbortError } from '@/lib/pacer'
 import { parseEditInput } from '@/lib/scoreFormat'
 import { applyCustomListChanges, CustomListAction } from '@/lib/customLists'
@@ -398,7 +398,7 @@ export function useBulkOperations(client: AniListClient | null) {
                 // batch) fails validation on the id; that counts as deleted
                 const gone = batch.filter((_, i) => {
                     const r = results[i]
-                    return r.ok || /not found|selected id is invalid/i.test(r.message)
+                    return r.ok || isAlreadyDeleted(r.message)
                 })
                 useStore.getState().removeMediaListEntries(gone)
                 ledger.ok(gone)

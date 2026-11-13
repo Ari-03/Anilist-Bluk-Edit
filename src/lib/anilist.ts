@@ -8,7 +8,7 @@ import {
 } from '@/types/anilist'
 import { VIEWER_QUERY } from '@/lib/viewerQuery'
 import { isAbortError, pacer, sleepUntil } from '@/lib/pacer'
-import { AliasResult, AniListRequestError, GraphQLBody, splitAliases } from '@/lib/graphql'
+import { AliasResult, AniListRequestError, GraphQLBody, isAlreadyDeleted, splitAliases } from '@/lib/graphql'
 
 export interface RelationMediaNode {
   id: number
@@ -59,6 +59,14 @@ export interface EntryUpdates {
 }
 
 type Variables = Record<string, unknown>
+
+const parseBody = <T,>(text: string): GraphQLBody<T> => {
+  try {
+    return JSON.parse(text) as GraphQLBody<T>
+  } catch {
+    return { data: null }
+  }
+}
 
 /**
  * Builds an aliased document with one alias per line so error `locations`
@@ -144,6 +152,7 @@ export class AniListClient {
       await pacer.acquire(opts.signal)
 
       let response: Response
+      let text: string
       try {
         response = await fetch(ANILIST_URL, {
           method: 'POST',
@@ -156,6 +165,8 @@ export class AniListClient {
           // Deliberately not opts.signal: Stop lets an in-flight request land
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         })
+        // Inside the try: the timeout also covers a body that stalls mid-read
+        text = await response.text()
       } catch (error) {
         const timedOut = error instanceof DOMException && error.name === 'TimeoutError'
         if (timedOut) {
@@ -185,7 +196,7 @@ export class AniListClient {
       }
 
       // Cloudflare answers some failures with an HTML page; keep the status
-      const body = (await response.json().catch(() => ({ data: null }))) as GraphQLBody<T>
+      const body = parseBody<T>(text)
       if (!body.data) {
         throw new AniListRequestError(
           response.status,
@@ -425,14 +436,20 @@ export class AniListClient {
     })
   }
 
+  /** An entry that is already gone (e.g. a re-send after a lost reply) counts as deleted */
   async deleteMediaListEntry(id: number, opts?: RequestOptions): Promise<{ deleted: boolean }> {
     const mutation = `
       mutation DeleteMediaListEntry($id: Int!) {
         DeleteMediaListEntry(id: $id) { deleted }
       }
     `
-    const data = await this.request<{ DeleteMediaListEntry: { deleted: boolean } }>(mutation, { id }, opts)
-    return data.DeleteMediaListEntry
+    try {
+      const data = await this.request<{ DeleteMediaListEntry: { deleted: boolean } }>(mutation, { id }, opts)
+      return data.DeleteMediaListEntry
+    } catch (error) {
+      if (error instanceof Error && isAlreadyDeleted(error.message)) return { deleted: true }
+      throw error
+    }
   }
 
   /**
