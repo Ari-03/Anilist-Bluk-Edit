@@ -289,7 +289,8 @@ export function useBulkOperations(client: AniListClient | null) {
         if (ledger.succeeded.length > 0) {
             // Local state now reflects confirmed server state; keep the
             // freshness window open so nothing schedules a clobbering refetch.
-            store.setLastDataLoad(Date.now())
+            // Data already marked stale (uncertain favourites) stays stale.
+            if (store.lastDataLoad !== null) store.setLastDataLoad(Date.now())
             store.deselectEntries(ledger.succeeded)
         }
 
@@ -364,13 +365,12 @@ export function useBulkOperations(client: AniListClient | null) {
 
         // Both need current data: customLists is a full-replacement array, so a
         // write built from stale entries drops memberships added elsewhere, and
-        // favourites only toggle. A retry always refreshes for favourites, since
-        // the failed attempt may have flipped some of them.
+        // favourites only toggle. A run whose toggles may or may not have landed
+        // clears lastDataLoad, so the next favourite run always refreshes here.
         if (hasCustomListChanges || favourite) {
             const { lastDataLoad, user } = store
             const fiveMinutes = 5 * 60 * 1000
-            const stale = !lastDataLoad || Date.now() - lastDataLoad > fiveMinutes
-            if (user && (stale || (favourite && entriesOverride))) {
+            if (user && (!lastDataLoad || Date.now() - lastDataLoad > fiveMinutes)) {
                 store.addNotification({ type: 'info', message: 'Refreshing list data before editing…' })
                 try {
                     await store.fetchMediaLists(user.id, useStore.getState().currentType, true)
@@ -441,11 +441,14 @@ export function useBulkOperations(client: AniListClient | null) {
             if (!isAbortError(error)) console.error('Bulk update failed:', error)
         } finally {
             finishRun('update', ledger)
-            // Reload so the list shows AniList's real favourite state. In the
-            // background: after a failure the pacer may be backing off for a
-            // minute, and Stop shouldn't wait for that. A retry refreshes first.
+            // AniList's favourite state is unknown: mark the data stale so any
+            // later favourite run (retry or a fresh Apply) refreshes before it
+            // plans toggles, and reload in the background so the list catches
+            // up. Not awaited: the pacer may be backing off for a minute, and
+            // Stop shouldn't wait for that.
             const { user, currentType } = useStore.getState()
             if (favourites.uncertain && user) {
+                useStore.getState().setLastDataLoad(null)
                 void useStore.getState().fetchMediaLists(user.id, currentType, true).catch(() => {})
             }
         }
