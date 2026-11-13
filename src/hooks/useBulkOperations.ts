@@ -175,10 +175,10 @@ const saveChunked = async (
 /**
  * Favourite phase: toggles only the entries whose state differs and returns
  * the entries now in the target state; the rest are failed on the ledger.
- * Progress is recorded as it happens so it survives Stop: `settle` marks
- * successes done right away (when nothing else is left to send for them),
- * and `state.uncertain` flags a failed toggle, after which AniList's state is
- * unknown (see toggleFavourites) and the caller must reload the lists.
+ * ToggleFavourite only flips, so the plan starts from a fresh read of each
+ * title's state, never the list cache: that may be minutes old, or wrong after
+ * a toggle whose reply was lost. `settle` marks successes done as they land
+ * (when nothing else is left to send for them), so Stop keeps them.
  */
 const setFavourites = async (
     client: AniListClient,
@@ -186,9 +186,27 @@ const setFavourites = async (
     action: Exclude<FavouriteAction, null>,
     ledger: Ledger,
     signal: AbortSignal,
-    { settle, state }: { settle: boolean; state: { uncertain: boolean } }
+    settle: boolean
 ): Promise<MediaList[]> => {
-    const { target, toToggle, alreadyDone, blocked } = planFavourites(entries, action)
+    let states
+    try {
+        states = await client.getFavouriteStates(entries.map(e => e.mediaId), { signal })
+    } catch (error) {
+        if (isAbortError(error)) throw error
+        ledger.fail(entries.map(e => e.id), `Couldn't check favourites on AniList: ${errorMessage(error)}`)
+        return []
+    }
+    const unread = entries.filter(e => !e.media || !states.has(e.mediaId))
+    ledger.fail(unread.map(e => e.id), "Couldn't check this title's favourite state on AniList")
+    const current = entries.flatMap(e => {
+        const state = states.get(e.mediaId)
+        return state && e.media ? [{ ...e, media: { ...e.media, ...state } }] : []
+    })
+    const store = useStore.getState()
+    store.setMediaFavourite(current.filter(e => e.media.isFavourite).map(e => e.id), true)
+    store.setMediaFavourite(current.filter(e => !e.media.isFavourite).map(e => e.id), false)
+
+    const { target, toToggle, alreadyDone, blocked } = planFavourites(current, action)
     ledger.fail(blocked.map(e => e.id), "AniList doesn't allow favouriting this title")
     const done = [...alreadyDone]
     if (settle) ledger.ok(alreadyDone.map(e => e.id))
@@ -203,7 +221,7 @@ const setFavourites = async (
             )
         } catch (error) {
             if (isAbortError(error)) throw error
-            state.uncertain = true
+            // State unknown (the toggle may have landed); the next run re-reads it
             ledger.fail(batch.map(e => e.id), errorMessage(error))
             continue
         }
@@ -212,9 +230,7 @@ const setFavourites = async (
         done.push(...flipped)
         if (settle) ledger.ok(flipped.map(e => e.id))
         results.forEach((r, i) => {
-            if (r.ok) return
-            state.uncertain = true
-            ledger.fail([batch[i].id], r.message)
+            if (!r.ok) ledger.fail([batch[i].id], r.message)
         })
         signal.throwIfAborted()
     }
@@ -289,8 +305,7 @@ export function useBulkOperations(client: AniListClient | null) {
         if (ledger.succeeded.length > 0) {
             // Local state now reflects confirmed server state; keep the
             // freshness window open so nothing schedules a clobbering refetch.
-            // Data already marked stale (uncertain favourites) stays stale.
-            if (store.lastDataLoad !== null) store.setLastDataLoad(Date.now())
+            store.setLastDataLoad(Date.now())
             store.deselectEntries(ledger.succeeded)
         }
 
@@ -363,11 +378,11 @@ export function useBulkOperations(client: AniListClient | null) {
         let entries = entriesOverride ?? store.getSelectedEntries()
         if (entries.length === 0 || !claim('update')) return false
 
-        // Both need current data: customLists is a full-replacement array, so a
-        // write built from stale entries drops memberships added elsewhere, and
-        // favourites only toggle. A run whose toggles may or may not have landed
-        // clears lastDataLoad, so the next favourite run always refreshes here.
-        if (hasCustomListChanges || favourite) {
+        // customLists is a full-replacement array on AniList's side, so a write
+        // built from stale entry data silently drops memberships added
+        // elsewhere. Refresh first when the local snapshot is past its window.
+        // (Favourites don't need this: setFavourites reads them fresh.)
+        if (hasCustomListChanges) {
             const { lastDataLoad, user } = store
             const fiveMinutes = 5 * 60 * 1000
             if (user && (!lastDataLoad || Date.now() - lastDataLoad > fiveMinutes)) {
@@ -409,15 +424,11 @@ export function useBulkOperations(client: AniListClient | null) {
         lastOperationRef.current = { type: 'update', options }
         const { ledger, signal } = startRun(entries)
 
-        const favourites = { uncertain: false }
         try {
             // Favourites first; an entry whose favourite failed skips the rest
             let remaining = entries
             if (favourite) {
-                remaining = await setFavourites(client, entries, favourite, ledger, signal, {
-                    settle: !hasEntryUpdates,
-                    state: favourites,
-                })
+                remaining = await setFavourites(client, entries, favourite, ledger, signal, !hasEntryUpdates)
                 if (!hasEntryUpdates) remaining = []
             }
 
@@ -441,16 +452,6 @@ export function useBulkOperations(client: AniListClient | null) {
             if (!isAbortError(error)) console.error('Bulk update failed:', error)
         } finally {
             finishRun('update', ledger)
-            // AniList's favourite state is unknown: mark the data stale so any
-            // later favourite run (retry or a fresh Apply) refreshes before it
-            // plans toggles, and reload in the background so the list catches
-            // up. Not awaited: the pacer may be backing off for a minute, and
-            // Stop shouldn't wait for that.
-            const { user, currentType } = useStore.getState()
-            if (favourites.uncertain && user) {
-                useStore.getState().setLastDataLoad(null)
-                void useStore.getState().fetchMediaLists(user.id, currentType, true).catch(() => {})
-            }
         }
         return true
     }, [client])

@@ -120,7 +120,7 @@ interface AppActions {
     setMediaFavourite: (entryIds: number[], isFavourite: boolean) => void
     removeMediaListEntries: (ids: number[]) => void
     setIsLoadingLists: (loading: boolean) => void
-    setLastDataLoad: (timestamp: number | null) => void
+    setLastDataLoad: (timestamp: number) => void
     shouldReloadData: () => boolean
     fetchMediaLists: (userId: number, type: MediaType, force?: boolean) => Promise<void>
 

@@ -92,6 +92,8 @@ const TRANSIENT_RETRY_DELAY_MS = 1000
 const REQUEST_TIMEOUT_MS = 30_000
 /** AniList's 429 carries Retry-After: 60, but the browser can't read it (see exchange) */
 const OPAQUE_FAILURE_PENALTY_MS = 61_000
+/** Media looked up per request when reading favourite state */
+const FAVOURITE_READ_BATCH = 25
 
 // Every mutation returns this so settled updates cover each field the forms can edit
 const RELATION_FIELDS = `
@@ -447,7 +449,8 @@ export class AniListClient {
    * Aliased ToggleFavourite, one alias per media. AniList only flips the
    * current state, so callers send just the media that differ (planFavourites)
    * and nothing is ever re-sent: a batch AniList aborted may have flipped some
-   * entries anyway, so failures leave the state unknown until a refetch.
+   * entries anyway, so failures leave the state unknown until the next
+   * getFavouriteStates.
    */
   async toggleFavourites(
     media: Array<{ id: number; type: MediaType }>,
@@ -461,8 +464,40 @@ export class AniListClient {
     const variables = Object.fromEntries(media.map((m, i) => [`id${i}`, m.id]))
 
     const { query, aliasLines } = aliasedDocument('mutation', defs, fields)
-    const body = await this.exchange<Record<string, { __typename: string } | null>>(query, variables, { ...opts, noResend: true })
+    const body = await this.exchange<Record<string, { __typename: string } | null>>(
+      query,
+      variables,
+      { ...opts, retryTransient: false, noResend: true }
+    )
     return splitAliases(body, media.map((_, i) => `f${i}`), aliasLines)
+  }
+
+  /**
+   * Each media's favourite state, read live (the list cache can be stale and
+   * favourite toggles must start from the truth). Aliased Media lookups, so
+   * adult titles resolve too; ids AniList can't find are left out.
+   */
+  async getFavouriteStates(
+    mediaIds: number[],
+    opts?: RequestOptions
+  ): Promise<Map<number, { isFavourite: boolean; isFavouriteBlocked: boolean }>> {
+    type State = { id: number; isFavourite: boolean; isFavouriteBlocked: boolean }
+    const states = new Map<number, Omit<State, 'id'>>()
+    for (let i = 0; i < mediaIds.length; i += FAVOURITE_READ_BATCH) {
+      const ids = mediaIds.slice(i, i + FAVOURITE_READ_BATCH)
+      const results = await this.settleAliased(ids, async batch => {
+        const defs = batch.map((_, k) => `$id${k}: Int`).join(', ')
+        const fields = batch.map((_, k) => `m${k}: Media(id: $id${k}) { id isFavourite isFavouriteBlocked }`)
+        const variables = Object.fromEntries(batch.map((id, k) => [`id${k}`, id]))
+        const { query, aliasLines } = aliasedDocument('query', defs, fields)
+        const body = await this.exchange<Record<string, State | null>>(query, variables, { retryTransient: true, ...opts })
+        return splitAliases(body, batch.map((_, k) => `m${k}`), aliasLines)
+      })
+      for (const r of results) {
+        if (r.ok) states.set(r.data.id, { isFavourite: r.data.isFavourite, isFavouriteBlocked: r.data.isFavouriteBlocked })
+      }
+    }
+    return states
   }
 
   async deleteMediaListEntry(id: number, opts?: RequestOptions): Promise<{ deleted: boolean }> {
