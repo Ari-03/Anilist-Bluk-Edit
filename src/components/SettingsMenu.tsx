@@ -26,7 +26,7 @@ export default function SettingsMenu() {
                     sideOffset={8}
                     collisionPadding={8}
                     aria-label="Settings"
-                    className="z-popover card w-64 p-4 shadow-overlay focus:outline-none"
+                    className="z-popover card w-72 p-4 shadow-overlay focus:outline-none"
                 >
                     <h2 className="text-sm font-semibold text-fg">Settings</h2>
                     <div className="mt-3 flex items-baseline justify-between">
@@ -44,7 +44,9 @@ export default function SettingsMenu() {
                                 aria-label={label}
                                 title={label}
                                 onClick={() => setAccentColor(id)}
-                                className="relative flex h-7 w-7 items-center justify-center rounded-full bg-tint text-white transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-tint focus-visible:ring-offset-2 focus-visible:ring-offset-surface before:absolute before:-inset-2"
+                                // 32px swatch plus a 6px ::before margin: 44px targets that stop short of the
+                                // neighbours, whose centres sit just over 44px apart in this row
+                                className="relative flex h-8 w-8 items-center justify-center rounded-full bg-tint text-white transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-tint focus-visible:ring-offset-2 focus-visible:ring-offset-surface before:absolute before:-inset-1.5"
                             >
                                 {accentColor === id && <Check className="h-4 w-4" strokeWidth={3} />}
                             </button>
