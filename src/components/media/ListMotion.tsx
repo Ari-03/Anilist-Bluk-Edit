@@ -26,15 +26,36 @@ const STAGGER_MS = 12
 /** No glide travels further than this, however large the entries are */
 const MAX_GLIDE_PX = 480
 
-/** Where each entry that is on screen right now sits, keyed by entry id */
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/**
+ * Where each entry that is on screen right now sits, keyed by entry id.
+ *
+ * Entries are laid out top to bottom in document order, so a binary search
+ * finds the first one that reaches the viewport and the scan stops at the
+ * first one below it. That keeps the work to a screenful plus a few probes
+ * however long the list is. (A glide in flight can sit a little out of order;
+ * at worst an entry near the viewport's edge is missed and fades in instead.)
+ */
 function measureOnScreen(root: HTMLElement | null): Map<string, Placed> {
     const placed = new Map<string, Placed>()
     if (!root) return placed
+    const elements = root.querySelectorAll<HTMLElement>('[data-entry-id]')
     const viewportHeight = window.innerHeight
-    root.querySelectorAll<HTMLElement>('[data-entry-id]').forEach(element => {
+
+    let first = 0
+    let end = elements.length
+    while (first < end) {
+        const middle = (first + end) >> 1
+        if (elements[middle].getBoundingClientRect().bottom > 0) end = middle
+        else first = middle + 1
+    }
+    for (let i = first; i < elements.length; i++) {
+        const element = elements[i]
         const rect = element.getBoundingClientRect()
-        if (rect.bottom > 0 && rect.top < viewportHeight) placed.set(element.dataset.entryId!, { element, rect })
-    })
+        if (rect.top >= viewportHeight) break
+        placed.set(element.dataset.entryId!, { element, rect })
+    }
     return placed
 }
 
@@ -64,9 +85,9 @@ function shouldGlide(element: HTMLElement, was: DOMRect, now: DOMRect): boolean 
  * came from far away, fade in. Entries that leave simply go. Children mark
  * each entry's outer element with `data-entry-id`.
  *
- * Only entries on screen are animated, so a library of 5,000 animates no more
- * than a screenful. The entries keep their place in the page, so they pass
- * under sticky headers and open menus as usual.
+ * Only entries on screen are measured and animated, so a library of 5,000
+ * costs no more than a screenful. The entries keep their place in the page,
+ * so they pass under sticky headers and open menus as usual.
  *
  * A class because getSnapshotBeforeUpdate is the one React hook point that
  * sees the DOM after a render but before its changes are applied, which is
@@ -81,6 +102,7 @@ export default class ListMotion extends Component<ListMotionProps> {
 
     getSnapshotBeforeUpdate(previous: ListMotionProps): Map<string, Placed> | null {
         if (previous.entries === this.props.entries && previous.layoutKey === this.props.layoutKey) return null
+        if (reducedMotion()) return null
         return previous.layoutKey === this.props.layoutKey ? measureOnScreen(this.root.current) : new Map()
     }
 
@@ -90,7 +112,7 @@ export default class ListMotion extends Component<ListMotionProps> {
 
     private play(before: Map<string, Placed>) {
         const root = this.root.current
-        if (!root || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        if (!root || reducedMotion()) return
 
         // A change can land mid-flight. `before` already holds the in-flight positions;
         // stop the glides so the positions measured next are the resting ones. Fades
