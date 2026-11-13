@@ -298,14 +298,17 @@ export function useBulkOperations(client: AniListClient | null) {
         return { ledger: createLedger(allIds, setProgress), signal: controller.signal }
     }
 
-    const finishRun = (kind: Operation, ledger: Ledger) => {
+    /** `wroteEntries`: AniList returned fresh entry data (not a favourite-only run) */
+    const finishRun = (kind: Operation, ledger: Ledger, wroteEntries = true) => {
         const store = useStore.getState()
         ledger.releaseUnattempted()
 
         if (ledger.succeeded.length > 0) {
             // Local state now reflects confirmed server state; keep the
             // freshness window open so nothing schedules a clobbering refetch.
-            store.setLastDataLoad(Date.now())
+            // A favourite-only run read just favourite flags, so it must not
+            // vouch for the rest (custom-list edits rely on this window).
+            if (wroteEntries) store.setLastDataLoad(Date.now())
             store.deselectEntries(ledger.succeeded)
         }
 
@@ -451,7 +454,7 @@ export function useBulkOperations(client: AniListClient | null) {
         } catch (error) {
             if (!isAbortError(error)) console.error('Bulk update failed:', error)
         } finally {
-            finishRun('update', ledger)
+            finishRun('update', ledger, hasEntryUpdates)
         }
         return true
     }, [client])
