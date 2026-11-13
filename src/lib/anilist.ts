@@ -178,10 +178,9 @@ export class AniListClient {
         // anything else is treated as a rate limit. A 429 means the request was
         // never run, and every mutation here is safe to re-send anyway.
         if (typeof navigator !== 'undefined' && navigator.onLine === false) throw error
-        if (rateLimitRetries++ < MAX_RATE_LIMIT_RETRIES) {
-          pacer.penalize(Date.now() + OPAQUE_FAILURE_PENALTY_MS)
-          continue
-        }
+        // Penalize even when giving up, so queued requests still back off
+        pacer.penalize(Date.now() + OPAQUE_FAILURE_PENALTY_MS)
+        if (rateLimitRetries++ < MAX_RATE_LIMIT_RETRIES) continue
         throw new AniListRequestError(429, [{ message: 'AniList is rate limiting requests. Try again in a minute.', status: 429 }])
       }
 
