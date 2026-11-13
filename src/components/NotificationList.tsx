@@ -76,7 +76,7 @@ export default function NotificationList() {
     const visible = notifications.slice(-MAX_VISIBLE)
 
     return (
-        <div className="fixed top-4 right-4 z-notification space-y-2 w-80 max-w-[calc(100vw-2rem)] pointer-events-none">
+        <div className="fixed top-20 right-4 z-notification space-y-2 w-80 max-w-[calc(100vw-2rem)] pointer-events-none">
             <AnimatePresence initial={false}>
                 {visible.map(n => (
                     <div key={n.id} className="pointer-events-auto">

@@ -12,6 +12,10 @@ interface MediaCardProps {
     currentType: MediaType
     bulkEditMode: boolean
     selected: boolean
+    /** Some entries are selected: unselected ones recede so the selection reads at a glance */
+    selectionActive?: boolean
+    /** Status sections already label the status, so cards only show it in flat views */
+    showStatus?: boolean
     syncState?: 'pending' | 'error'
     onToggleSelect: () => void
     onStartEdit: () => void
@@ -25,6 +29,8 @@ export default function MediaCard({
     currentType,
     bulkEditMode,
     selected,
+    selectionActive = false,
+    showStatus = true,
     syncState,
     onToggleSelect,
     onStartEdit,
@@ -48,7 +54,8 @@ export default function MediaCard({
             className={cn(
                 'group relative card overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-8px_var(--glow,rgb(0_0_0/0.35))]',
                 bulkEditMode && 'cursor-pointer',
-                selected && 'ring-2 ring-purple shadow-raised',
+                selected && 'ring-2 ring-purple ring-offset-2 ring-offset-page shadow-raised',
+                selectionActive && !selected && !syncState && 'opacity-60 saturate-50 hover:opacity-100 hover:saturate-100',
                 syncState === 'error' && 'ring-2 ring-danger',
                 syncState === 'pending' && 'opacity-70'
             )}
@@ -91,25 +98,19 @@ export default function MediaCard({
                     </div>
                 </div>
 
-                {/* Status chip */}
-                {entry.status && (
+                {/* Status chip (flat views), otherwise the format tag */}
+                {showStatus && entry.status ? (
                     <div className="absolute top-2 right-2 flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-2 py-0.5">
                         <span className={cn('w-1.5 h-1.5 rounded-full', getStatusColor(entry.status))} />
-                        <span className="text-[10px] font-medium text-white">
+                        <span className="text-[11px] font-medium text-white">
                             {getStatusLabel(entry.status, currentType)}
                         </span>
                     </div>
-                )}
-
-                {/* Format tag */}
-                {entry.media?.format && (
-                    <div className="absolute top-2 left-2 rounded-md bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white/90 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                ) : entry.media?.format ? (
+                    <div className="absolute top-2 right-2 rounded-md bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[11px] font-medium text-white/90">
                         {formatMediaFormat(entry.media.format)}
                     </div>
-                )}
-
-                {/* Selection wash */}
-                {selected && <div className="absolute inset-0 bg-purple/20 pointer-events-none" />}
+                ) : null}
 
                 {/* Selection badge */}
                 {bulkEditMode && (
@@ -121,8 +122,8 @@ export default function MediaCard({
                         className={cn(
                             'absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-150',
                             selected
-                                ? 'bg-purple border-purple text-white scale-100 opacity-100'
-                                : 'bg-black/40 border-white/70 text-transparent opacity-0 group-hover:opacity-100'
+                                ? 'bg-purple border-purple text-white'
+                                : 'bg-black/50 border-white/80 text-transparent group-hover:text-white/70'
                         )}
                         title={selected ? 'Deselect' : 'Select'}
                     >
@@ -144,7 +145,8 @@ export default function MediaCard({
 
                 {/* Hover actions */}
                 {!bulkEditMode && !editForm && (
-                    <div className="absolute top-9 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-150">
+                    /* Hover-revealed on pointer devices; always shown on touch, and when focused */
+                    <div className="absolute top-9 right-2 flex flex-col gap-1 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0 [@media(hover:none)]:opacity-100 [@media(hover:none)]:translate-x-0 transition-all duration-150">
                         <button
                             onClick={onStartEdit}
                             className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center hover:bg-accent transition-colors"

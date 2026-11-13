@@ -9,6 +9,7 @@ import BulkEditPanel from '@/components/bulk/BulkEditPanel'
 import LeftSidebar from '@/components/sidebar/LeftSidebar'
 import MobileSidebar from '@/components/sidebar/MobileSidebar'
 import ActiveFilterChips from '@/components/sidebar/ActiveFilterChips'
+import ListToolbar from '@/components/ListToolbar'
 import NotificationList from '@/components/NotificationList'
 import TokenLogin from '@/components/TokenLogin'
 import AccountSwitcher from '@/components/AccountSwitcher'
@@ -154,6 +155,7 @@ export default function Home() {
 
           <main className={`flex-1 min-w-0 ${bulkEditMode ? 'pb-32' : ''}`}>
             <div className="mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4 max-w-[1600px]">
+              <ListToolbar />
               <ActiveFilterChips />
               <BulkEditPanel client={client} />
               {showSkeleton ? (

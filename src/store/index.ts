@@ -472,13 +472,15 @@ export const useStore = create<AppState & AppActions>()(
                 },
 
                 // View actions
+                // Search, genre, year, score and sort carry over between anime and
+                // manga; status filters don't, since custom list names differ per type
                 setCurrentType: (currentType) => {
-                    set({
+                    set(state => ({
                         currentType,
                         selectedEntries: new Set(),
-                        currentStatus: 'ALL', // Reset status when switching types
-                        filters: initialState.filters // Clear all filters when switching media types
-                    })
+                        currentStatus: 'ALL',
+                        filters: { ...state.filters, status: undefined, format: undefined },
+                    }))
                     // Apply filters immediately after state update
                     get().applyFilters()
                 },
@@ -865,6 +867,7 @@ export const useStore = create<AppState & AppActions>()(
                     activeAccountId: state.activeAccountId,
                     darkMode: state.darkMode,
                     currentType: state.currentType,
+                    viewMode: state.viewMode,
                     filters: state.filters,
                     collapsedStatusSections: state.collapsedStatusSections,
                 }),

@@ -13,6 +13,12 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
 const EMPTY_EDIT: QuickEditValues = { score: '', progress: '', notes: '' }
 
+// Layout animation reflows every card on each filter keystroke; past this many
+// entries it costs more than it shows, so cards just appear in place
+const LAYOUT_ANIMATION_LIMIT = 150
+// Only the first screenful staggers in on first load
+const STAGGER_LIMIT = 24
+
 // Mirrors the status sort order in the store's applyFilters()
 const STATUS_SECTION_ORDER: MediaListStatus[] = [
     MediaListStatus.CURRENT,
@@ -183,6 +189,9 @@ export default function MediaListView({ client }: MediaListViewProps) {
     const showSections = orderedStatuses.length > 1
     const collapsedForType = collapsedStatusSections[currentType] || []
 
+    const animateLayout = filteredEntries.length <= LAYOUT_ANIMATION_LIMIT
+    const selectionActive = bulkEditMode && selectedEntries.size > 0
+
     const renderEntries = (entries: MediaList[]) => (
         <div className={containerClass}>
             <AnimatePresence mode="popLayout">
@@ -208,6 +217,8 @@ export default function MediaListView({ client }: MediaListViewProps) {
                             currentType,
                             bulkEditMode,
                             selected: selectedEntries.has(entry.id),
+                            selectionActive,
+                            showStatus: !showSections,
                             syncState: entrySync[entry.id],
                             onToggleSelect: () => toggleEntrySelection(entry.id),
                             onStartEdit: () => handleStartEdit(entry),
@@ -222,14 +233,14 @@ export default function MediaListView({ client }: MediaListViewProps) {
                         return (
                             <m.div
                                 key={entry.id}
-                                layout="position"
+                                layout={animateLayout ? 'position' : false}
                                 initial={{ opacity: 0, scale: 0.96 }}
                                 animate={{
                                     opacity: 1,
                                     scale: 1,
                                     transition: {
                                         duration: 0.25,
-                                        delay: staggerThisRender ? Math.min(index * 0.02, 0.4) : 0,
+                                        delay: staggerThisRender && index < STAGGER_LIMIT ? index * 0.02 : 0,
                                     },
                                 }}
                                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.18 } }}

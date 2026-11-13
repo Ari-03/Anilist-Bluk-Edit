@@ -12,6 +12,8 @@ interface MediaListRowProps {
     currentType: MediaType
     bulkEditMode: boolean
     selected: boolean
+    selectionActive?: boolean
+    showStatus?: boolean
     syncState?: 'pending' | 'error'
     onToggleSelect: () => void
     onStartEdit: () => void
@@ -24,6 +26,8 @@ export default function MediaListRow({
     currentType,
     bulkEditMode,
     selected,
+    selectionActive = false,
+    showStatus = true,
     syncState,
     onToggleSelect,
     onStartEdit,
@@ -44,15 +48,13 @@ export default function MediaListRow({
             className={cn(
                 'group relative card p-3 flex items-center gap-3 transition-all duration-200',
                 bulkEditMode && 'cursor-pointer',
-                selected && 'ring-2 ring-purple',
+                selected && 'ring-2 ring-purple ring-offset-2 ring-offset-page',
+                selectionActive && !selected && !syncState && 'opacity-60 hover:opacity-100',
                 syncState === 'error' && 'ring-2 ring-danger',
                 syncState === 'pending' && 'opacity-70'
             )}
             onClick={handleRowClick}
         >
-            {/* Selection tint */}
-            {selected && <div className="absolute inset-0 rounded-xl bg-purple/10 pointer-events-none" />}
-
             {/* Selection badge */}
             {bulkEditMode && (
                 <button
@@ -64,7 +66,7 @@ export default function MediaListRow({
                         'flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-150',
                         selected
                             ? 'bg-purple border-purple text-white'
-                            : 'border-edge text-transparent hover:border-purple'
+                            : 'border-edge-strong text-transparent hover:border-purple'
                     )}
                     title={selected ? 'Deselect' : 'Select'}
                 >
@@ -96,7 +98,7 @@ export default function MediaListRow({
                     <div className="mt-2">{editForm}</div>
                 ) : (
                     <div className="mt-1 flex items-center gap-3 text-xs text-fg-muted">
-                        {entry.status && (
+                        {showStatus && entry.status && (
                             <span className="flex items-center gap-1.5">
                                 <span className={cn('w-1.5 h-1.5 rounded-full', getStatusColor(entry.status))} />
                                 {getStatusLabel(entry.status, currentType)}
@@ -126,7 +128,7 @@ export default function MediaListRow({
 
             {/* Actions */}
             {!editForm && (
-                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
+                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
                     <button
                         onClick={onStartEdit}
                         className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-raised transition-colors"
