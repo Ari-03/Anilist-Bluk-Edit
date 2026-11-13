@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@/store'
 import { MediaType } from '@/types/anilist'
 import { cn } from '@/lib/utils'
 import { CheckSquare, Grid3X3, List, Search, X } from 'lucide-react'
+
+const SEARCH_DEBOUNCE_MS = 150
 
 /**
  * Heading row above the list: what's shown, title search, grid/list toggle and
@@ -17,6 +20,24 @@ export default function ListToolbar() {
     const setViewMode = useStore(s => s.setViewMode)
     const bulkEditMode = useStore(s => s.bulkEditMode)
     const setBulkEditMode = useStore(s => s.setBulkEditMode)
+
+    // Typing updates the box instantly; the list refilters once typing pauses
+    const [text, setText] = useState(search)
+    const pushed = useRef(search)
+    // Follow changes made elsewhere (a removed chip, "Clear all"), never our own echo
+    useEffect(() => {
+        if (search === pushed.current) return
+        pushed.current = search
+        setText(search)
+    }, [search])
+    useEffect(() => {
+        if (text === pushed.current) return
+        const timer = setTimeout(() => {
+            pushed.current = text
+            setFilters({ search: text })
+        }, SEARCH_DEBOUNCE_MS)
+        return () => clearTimeout(timer)
+    }, [text, setFilters])
 
     const count = (n: number) => n.toLocaleString()
     const views = [
@@ -43,13 +64,17 @@ export default function ListToolbar() {
                     type="search"
                     placeholder="Search titles…"
                     aria-label="Search titles"
-                    value={search}
-                    onChange={(e) => setFilters({ search: e.target.value })}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
                     className="input pl-9 pr-8"
                 />
-                {search && (
+                {text && (
                     <button
-                        onClick={() => setFilters({ search: '' })}
+                        onClick={() => {
+                            setText('')
+                            pushed.current = ''
+                            setFilters({ search: '' })
+                        }}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-subtle hover:text-fg"
                         aria-label="Clear search"
                     >

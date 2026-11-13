@@ -244,6 +244,10 @@ const initialState: AppState = {
     darkMode: true, // dark-first; persisted preference wins for returning users
 }
 
+/** Selector for the active media type's entries (use inside useStore so renders track list changes) */
+export const selectCurrentLists = (state: Pick<AppState, 'currentType' | 'animeLists' | 'mangaLists'>) =>
+    state.currentType === MediaType.ANIME ? state.animeLists : state.mangaLists
+
 export const useStore = create<AppState & AppActions>()(
     devtools(
         persist(

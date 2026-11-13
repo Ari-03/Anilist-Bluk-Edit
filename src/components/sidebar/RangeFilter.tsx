@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import RangeSlider from '@/components/ui/RangeSlider'
 
 interface RangeFilterProps {
@@ -23,6 +24,7 @@ export default function RangeFilter({
     toLabel = 'To',
 }: RangeFilterProps) {
     const parse = step < 1 ? parseFloat : (v: string) => parseInt(v)
+    const fieldId = useId()
 
     return (
         <div className="space-y-4">
@@ -30,8 +32,9 @@ export default function RangeFilter({
 
             <div className="flex items-center gap-3">
                 <div className="flex-1">
-                    <label className="block text-xs text-fg-muted mb-1">{fromLabel}</label>
+                    <label htmlFor={`${fieldId}-f1`} className="block text-xs text-fg-muted mb-1">{fromLabel}</label>
                     <input
+                        id={`${fieldId}-f1`}
                         type="number"
                         className="input h-9 text-sm"
                         min={min}
@@ -45,8 +48,9 @@ export default function RangeFilter({
                     />
                 </div>
                 <div className="flex-1">
-                    <label className="block text-xs text-fg-muted mb-1">{toLabel}</label>
+                    <label htmlFor={`${fieldId}-f2`} className="block text-xs text-fg-muted mb-1">{toLabel}</label>
                     <input
+                        id={`${fieldId}-f2`}
                         type="number"
                         className="input h-9 text-sm"
                         min={value[0]}

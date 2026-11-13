@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useStore } from '@/store'
+import { selectCurrentLists, useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { MediaType } from '@/types/anilist'
 import { getScoreRange } from '@/lib/scoreFormat'
-import { PopoverPosition } from '@/components/ui/Popover'
 import FilterSection from '@/components/sidebar/FilterSection'
 import StatusFilter from '@/components/sidebar/StatusFilter'
 import GenreFilter from '@/components/sidebar/GenreFilter'
@@ -22,8 +22,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const POPOVER_WIDTH = 320
-
 export default function SidebarContent() {
     const {
         currentType,
@@ -32,47 +30,27 @@ export default function SidebarContent() {
         setFilters,
         clearFilters,
         user,
-        getCurrentLists,
-    } = useStore()
+        currentLists,
+    } = useStore(
+        useShallow(s => ({
+            currentType: s.currentType,
+            setCurrentType: s.setCurrentType,
+            filters: s.filters,
+            setFilters: s.setFilters,
+            clearFilters: s.clearFilters,
+            user: s.user,
+            currentLists: selectCurrentLists(s),
+        }))
+    )
 
     const [activePopout, setActivePopout] = useState<string | null>(null)
-    const [popoutPosition, setPopoutPosition] = useState<PopoverPosition | null>(null)
-
-    const togglePopout = (section: string) => (event: React.MouseEvent<HTMLButtonElement>) => {
-        if (activePopout === section) {
-            setActivePopout(null)
-            setPopoutPosition(null)
-            return
-        }
-        const rect = event.currentTarget.getBoundingClientRect()
-        const vw = window.innerWidth
-        const vh = window.innerHeight
-        let top = rect.top
-        let left = rect.right + 8
-        // On narrow screens the popout won't fit to the right — drop it below
-        if (left + POPOVER_WIDTH > vw - 8) {
-            left = Math.max(8, Math.min(rect.left, vw - POPOVER_WIDTH - 8))
-            top = rect.bottom + 8
-        }
-        top = Math.max(8, Math.min(top, vh - 120))
-        setActivePopout(section)
-        setPopoutPosition({ top, left })
-    }
-
-    const closePopout = () => {
-        setActivePopout(null)
-        setPopoutPosition(null)
-    }
-
     const sectionProps = (id: string) => ({
         open: activePopout === id,
-        position: popoutPosition,
-        onTrigger: togglePopout(id),
-        onClose: closePopout,
+        onOpenChange: (open: boolean) => setActivePopout(open ? id : null),
     })
 
     // Year bounds from the actual library
-    const lists = getCurrentLists()
+    const lists = currentLists
     const currentYear = new Date().getFullYear()
     const years = lists
         .map(e => e.media?.startDate?.year || e.media?.seasonYear)
@@ -105,6 +83,7 @@ export default function SidebarContent() {
                 <button
                     key={opt.value}
                     onClick={() => onSelect(opt.value)}
+                    aria-pressed={current === opt.value}
                     className={cn(
                         'flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-semibold transition-all duration-150',
                         current === opt.value

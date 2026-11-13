@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { AnimatePresence, m } from 'framer-motion'
-import { useStore } from '@/store'
+import { selectCurrentLists, useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { AniListClient } from '@/lib/anilist'
 import { MediaList, MediaListStatus, MediaType } from '@/types/anilist'
 import { getScoreRange, parseEditInput } from '@/lib/scoreFormat'
@@ -51,9 +52,30 @@ export default function MediaListView({ client }: MediaListViewProps) {
         mergeMediaListEntries,
         removeMediaListEntry,
         addNotification,
-        getCurrentLists,
+        currentLists,
         clearFilters,
-    } = useStore()
+    } = useStore(
+        useShallow(s => ({
+            user: s.user,
+            currentType: s.currentType,
+            filteredEntries: s.filteredEntries,
+            selectedEntries: s.selectedEntries,
+            bulkEditMode: s.bulkEditMode,
+            entrySync: s.entrySync,
+            viewMode: s.viewMode,
+            filters: s.filters,
+            collapsedStatusSections: s.collapsedStatusSections,
+            toggleStatusSection: s.toggleStatusSection,
+            selectEntries: s.selectEntries,
+            deselectEntries: s.deselectEntries,
+            toggleEntrySelection: s.toggleEntrySelection,
+            mergeMediaListEntries: s.mergeMediaListEntries,
+            removeMediaListEntry: s.removeMediaListEntry,
+            addNotification: s.addNotification,
+            currentLists: selectCurrentLists(s),
+            clearFilters: s.clearFilters,
+        }))
+    )
 
     const [editingEntry, setEditingEntry] = useState<number | null>(null)
     const [editValues, setEditValues] = useState<QuickEditValues>(EMPTY_EDIT)
@@ -76,7 +98,8 @@ export default function MediaListView({ client }: MediaListViewProps) {
         setEditError(null)
     }
 
-    const handleStartEdit = (entry: (typeof filteredEntries)[number]) => {
+    // Stable so memoized cards skip re-rendering when other entries change
+    const handleStartEdit = useCallback((entry: MediaList) => {
         setEditingEntry(entry.id)
         setEditError(null)
         setEditValues({
@@ -85,7 +108,14 @@ export default function MediaListView({ client }: MediaListViewProps) {
             progress: String(entry.progress ?? 0),
             notes: entry.notes || '',
         })
-    }
+    }, [])
+
+    const handleDelete = useCallback((entry: MediaList) => {
+        setDeleteTarget({
+            id: entry.id,
+            title: entry.media?.title?.userPreferred || entry.media?.title?.romaji || 'this entry',
+        })
+    }, [])
 
     const handleSaveEdit = async (mediaId: number) => {
         if (!client) return
@@ -154,7 +184,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
         return (
             <EmptyState
                 currentType={currentType}
-                libraryEmpty={getCurrentLists().length === 0}
+                libraryEmpty={currentLists.length === 0}
                 hasActiveFilters={hasActiveFilters}
                 onRefresh={() => {
                     if (user) useStore.getState().fetchMediaLists(user.id, currentType, true).catch(() => { })
@@ -222,13 +252,9 @@ export default function MediaListView({ client }: MediaListViewProps) {
                             selectionActive,
                             showStatus: !showSections,
                             syncState: entrySync[entry.id],
-                            onToggleSelect: () => toggleEntrySelection(entry.id),
-                            onStartEdit: () => handleStartEdit(entry),
-                            onDelete: () =>
-                                setDeleteTarget({
-                                    id: entry.id,
-                                    title: entry.media?.title?.userPreferred || entry.media?.title?.romaji || 'this entry',
-                                }),
+                            onToggleSelect: toggleEntrySelection,
+                            onStartEdit: handleStartEdit,
+                            onDelete: handleDelete,
                             editForm,
                         }
 
@@ -247,6 +273,10 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                 }}
                                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.18 } }}
                                 transition={{ layout: { type: 'spring', stiffness: 350, damping: 30 } }}
+                                // Big lists skip layout work for off-screen cards (layout animation is off there anyway)
+                                className={animateLayout ? undefined : isGrid
+                                    ? '[content-visibility:auto] [contain-intrinsic-size:auto_320px]'
+                                    : '[content-visibility:auto] [contain-intrinsic-size:auto_84px]'}
                             >
                                 {isGrid ? <MediaCard {...shared} /> : <MediaListRow {...shared} />}
                             </m.div>

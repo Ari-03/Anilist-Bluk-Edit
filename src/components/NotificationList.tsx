@@ -51,12 +51,13 @@ function Toast({ type, message, onDismiss }: ToastProps) {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 24, scale: 0.96, transition: { duration: 0.15 } }}
             transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+            role={type === 'error' ? 'alert' : undefined}
             className={cn('card border-l-4 p-3.5 shadow-raised', style.accent)}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
         >
             <div className="flex items-start gap-2.5">
-                <Icon className={cn('w-[18px] h-[18px] flex-shrink-0 mt-px', style.iconColor)} />
+                <Icon className={cn('w-[18px] h-[18px] flex-shrink-0 mt-px', style.iconColor)} aria-hidden />
                 <p className="flex-1 min-w-0 text-sm text-fg break-words">{message}</p>
                 <button
                     onClick={onDismiss}
@@ -76,7 +77,12 @@ export default function NotificationList() {
     const visible = notifications.slice(-MAX_VISIBLE)
 
     return (
-        <div className="fixed top-20 right-4 z-notification space-y-2 w-80 max-w-[calc(100vw-2rem)] pointer-events-none">
+        <div
+            role="region"
+            aria-label="Notifications"
+            aria-live="polite"
+            className="fixed top-20 right-4 z-notification space-y-2 w-80 max-w-[calc(100vw-2rem)] pointer-events-none"
+        >
             <AnimatePresence initial={false}>
                 {visible.map(n => (
                     <div key={n.id} className="pointer-events-auto">

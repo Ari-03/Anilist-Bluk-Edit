@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { MediaList, MediaListStatus, MediaType } from '@/types/anilist'
 import { getStatusLabel } from '@/lib/anilist'
 import { ScoreRange } from '@/lib/scoreFormat'
@@ -38,13 +39,15 @@ export default function QuickEditForm({
     busy = false,
     error = null,
 }: QuickEditFormProps) {
+    const fieldId = useId()
     const maxProgress = entry.media?.episodes || entry.media?.chapters || 9999
 
     const fields = (
         <>
             <div>
-                <label className="block text-xs font-medium text-fg-muted mb-1">Status</label>
+                <label htmlFor={`${fieldId}-f1`} className="block text-xs font-medium text-fg-muted mb-1">Status</label>
                 <select
+                    id={`${fieldId}-f1`}
                     value={values.status || ''}
                     onChange={(e) => onChange({ ...values, status: e.target.value as MediaListStatus })}
                     className="select h-8 text-xs"
@@ -57,8 +60,9 @@ export default function QuickEditForm({
                 </select>
             </div>
             <div>
-                <label className="block text-xs font-medium text-fg-muted mb-1">Score</label>
+                <label htmlFor={`${fieldId}-f2`} className="block text-xs font-medium text-fg-muted mb-1">Score</label>
                 <input
+                    id={`${fieldId}-f2`}
                     type="number"
                     inputMode="decimal"
                     value={values.score}
@@ -71,8 +75,9 @@ export default function QuickEditForm({
                 />
             </div>
             <div>
-                <label className="block text-xs font-medium text-fg-muted mb-1">Progress</label>
+                <label htmlFor={`${fieldId}-f3`} className="block text-xs font-medium text-fg-muted mb-1">Progress</label>
                 <input
+                    id={`${fieldId}-f3`}
                     type="number"
                     inputMode="numeric"
                     value={values.progress}
@@ -85,8 +90,9 @@ export default function QuickEditForm({
             </div>
             {layout === 'row' && (
                 <div>
-                    <label className="block text-xs font-medium text-fg-muted mb-1">Notes</label>
+                    <label htmlFor={`${fieldId}-f4`} className="block text-xs font-medium text-fg-muted mb-1">Notes</label>
                     <input
+                        id={`${fieldId}-f4`}
                         type="text"
                         value={values.notes}
                         onChange={(e) => onChange({ ...values, notes: e.target.value })}

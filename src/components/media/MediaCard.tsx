@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { memo, ReactNode } from 'react'
 import { Image as IKImage } from '@imagekit/next'
 import { MediaList, MediaType } from '@/types/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'
@@ -17,14 +17,15 @@ interface MediaCardProps {
     /** Status sections already label the status, so cards only show it in flat views */
     showStatus?: boolean
     syncState?: 'pending' | 'error'
-    onToggleSelect: () => void
-    onStartEdit: () => void
-    onDelete: () => void
+    // Take the entry (or id) so one stable callback serves every card and memo holds
+    onToggleSelect: (id: number) => void
+    onStartEdit: (entry: MediaList) => void
+    onDelete: (entry: MediaList) => void
     /** Rendered below the cover when the entry is being quick-edited */
     editForm?: ReactNode
 }
 
-export default function MediaCard({
+function MediaCard({
     entry,
     currentType,
     bulkEditMode,
@@ -46,7 +47,7 @@ export default function MediaCard({
         if (!bulkEditMode) return
         const target = e.target as HTMLElement
         if (target.closest('button, a, input, select, textarea')) return
-        onToggleSelect()
+        onToggleSelect(entry.id)
     }
 
     return (
@@ -117,7 +118,7 @@ export default function MediaCard({
                     <button
                         onClick={(e) => {
                             e.stopPropagation()
-                            onToggleSelect()
+                            onToggleSelect(entry.id)
                         }}
                         className={cn(
                             'absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-150',
@@ -125,7 +126,10 @@ export default function MediaCard({
                                 ? 'bg-purple border-purple text-white'
                                 : 'bg-black/50 border-white/80 text-transparent group-hover:text-white/70'
                         )}
-                        title={selected ? 'Deselect' : 'Select'}
+                        role="checkbox"
+                    aria-checked={selected}
+                    aria-label={`Select ${title}`}
+                    title={selected ? 'Deselect' : 'Select'}
                     >
                         <Check className="w-3.5 h-3.5" strokeWidth={3} />
                     </button>
@@ -148,7 +152,7 @@ export default function MediaCard({
                     /* Hover-revealed on pointer devices; always shown on touch, and when focused */
                     <div className="absolute top-9 right-2 flex flex-col gap-1 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0 [@media(hover:none)]:opacity-100 [@media(hover:none)]:translate-x-0 transition-all duration-150 motion-reduce:transition-none motion-reduce:translate-x-0">
                         <button
-                            onClick={onStartEdit}
+                            onClick={() => onStartEdit(entry)}
                             className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center hover:bg-accent transition-colors"
                             title="Quick edit"
                         >
@@ -164,7 +168,7 @@ export default function MediaCard({
                             <ExternalLink className="w-3.5 h-3.5" />
                         </a>
                         <button
-                            onClick={onDelete}
+                            onClick={() => onDelete(entry)}
                             className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center hover:bg-danger transition-colors"
                             title="Delete entry"
                         >
@@ -189,3 +193,5 @@ export default function MediaCard({
         </div>
     )
 }
+
+export default memo(MediaCard)

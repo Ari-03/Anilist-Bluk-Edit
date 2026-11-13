@@ -1,4 +1,5 @@
-import { useStore } from '@/store'
+import { selectCurrentLists, useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { MediaType, MediaListStatus } from '@/types/anilist'
 import { getStatusLabel } from '@/lib/anilist'
 import CheckboxList from '@/components/sidebar/CheckboxList'
@@ -10,12 +11,22 @@ export default function StatusFilter() {
         filters,
         setFilters,
         user,
-        getCurrentLists,
+        currentLists,
         showHiddenFromStatusLists,
         setShowHiddenFromStatusLists,
-    } = useStore()
+    } = useStore(
+        useShallow(s => ({
+            currentType: s.currentType,
+            filters: s.filters,
+            setFilters: s.setFilters,
+            user: s.user,
+            currentLists: selectCurrentLists(s),
+            showHiddenFromStatusLists: s.showHiddenFromStatusLists,
+            setShowHiddenFromStatusLists: s.setShowHiddenFromStatusLists,
+        }))
+    )
 
-    const hiddenEntriesCount = getCurrentLists().filter(e => e.hiddenFromStatusLists).length
+    const hiddenEntriesCount = currentLists.filter(e => e.hiddenFromStatusLists).length
     const mediaListOptions = currentType === MediaType.ANIME
         ? user?.mediaListOptions?.animeList
         : user?.mediaListOptions?.mangaList

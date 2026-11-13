@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { MediaListStatus, MediaType, User } from '@/types/anilist'
 import { getStatusLabel } from '@/lib/anilist'
 import { getScoreRange, parseEditInput } from '@/lib/scoreFormat'
@@ -23,6 +24,7 @@ export default function BulkEditForm({
     availableCustomLists,
     disabled,
 }: BulkEditFormProps) {
+    const fieldId = useId()
     const scoreFormat = user?.mediaListOptions?.scoreFormat
     const scoreRange = getScoreRange(scoreFormat)
     const parsed = parseEditInput(options.score, options.progress, scoreFormat)
@@ -37,8 +39,9 @@ export default function BulkEditForm({
         <div className="space-y-4">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 <div>
-                    <label className="block text-xs font-medium text-fg-muted mb-1">Status</label>
+                    <label htmlFor={`${fieldId}-f1`} className="block text-xs font-medium text-fg-muted mb-1">Status</label>
                     <select
+                        id={`${fieldId}-f1`}
                         value={options.status}
                         onChange={(e) => onChange({ ...options, status: e.target.value as MediaListStatus | '' })}
                         className="select h-9 text-sm"
@@ -54,8 +57,9 @@ export default function BulkEditForm({
                 </div>
 
                 <div>
-                    <label className="block text-xs font-medium text-fg-muted mb-1">Score</label>
+                    <label htmlFor={`${fieldId}-f2`} className="block text-xs font-medium text-fg-muted mb-1">Score</label>
                     <input
+                        id={`${fieldId}-f2`}
                         type="number"
                         inputMode="decimal"
                         value={options.score}
@@ -72,8 +76,9 @@ export default function BulkEditForm({
                 </div>
 
                 <div>
-                    <label className="block text-xs font-medium text-fg-muted mb-1">Progress</label>
+                    <label htmlFor={`${fieldId}-f3`} className="block text-xs font-medium text-fg-muted mb-1">Progress</label>
                     <input
+                        id={`${fieldId}-f3`}
                         type="number"
                         inputMode="numeric"
                         value={options.progress}
@@ -88,8 +93,9 @@ export default function BulkEditForm({
                 </div>
 
                 <div>
-                    <label className="block text-xs font-medium text-fg-muted mb-1">Privacy</label>
+                    <label htmlFor={`${fieldId}-f4`} className="block text-xs font-medium text-fg-muted mb-1">Privacy</label>
                     <select
+                        id={`${fieldId}-f4`}
                         value={options.private}
                         onChange={(e) => onChange({ ...options, private: e.target.value })}
                         className="select h-9 text-sm"
@@ -102,8 +108,9 @@ export default function BulkEditForm({
                 </div>
 
                 <div>
-                    <label className="block text-xs font-medium text-fg-muted mb-1">Status list visibility</label>
+                    <label htmlFor={`${fieldId}-f5`} className="block text-xs font-medium text-fg-muted mb-1">Status list visibility</label>
                     <select
+                        id={`${fieldId}-f5`}
                         value={options.hiddenFromStatusLists}
                         onChange={(e) => onChange({ ...options, hiddenFromStatusLists: e.target.value })}
                         className="select h-9 text-sm"
@@ -116,8 +123,9 @@ export default function BulkEditForm({
                 </div>
 
                 <div>
-                    <label className="block text-xs font-medium text-fg-muted mb-1">Notes</label>
+                    <label htmlFor={`${fieldId}-f6`} className="block text-xs font-medium text-fg-muted mb-1">Notes</label>
                     <input
+                        id={`${fieldId}-f6`}
                         type="text"
                         value={options.notes}
                         onChange={(e) => onChange({ ...options, notes: e.target.value })}

@@ -45,6 +45,9 @@ export default function StatusSection({
             <div className="sticky top-16 z-10 -mx-1 px-1 flex items-center gap-2.5 bg-page/95 backdrop-blur-sm">
                 {bulkEditMode && (
                     <button
+                        role="checkbox"
+                        aria-checked={allSelected ? true : someSelected ? 'mixed' : false}
+                        aria-label={`Select all ${getStatusLabel(status, mediaType)}`}
                         onClick={allSelected ? onDeselectSection : onSelectSection}
                         className={cn(
                             'flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-150',
@@ -63,6 +66,7 @@ export default function StatusSection({
                 )}
                 <button
                     onClick={onToggleCollapsed}
+                    aria-expanded={!collapsed}
                     className="flex flex-1 items-center gap-2.5 py-2 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     title={collapsed ? 'Expand section' : 'Collapse section'}
                 >

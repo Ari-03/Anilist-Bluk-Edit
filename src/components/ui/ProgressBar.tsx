@@ -6,12 +6,21 @@ interface ProgressBarProps {
     className?: string
     barClassName?: string
     indeterminate?: boolean
+    /** Accessible name, e.g. "Updating entries" */
+    label?: string
 }
 
-export default function ProgressBar({ value, max, className, barClassName, indeterminate }: ProgressBarProps) {
+export default function ProgressBar({ value, max, className, barClassName, indeterminate, label }: ProgressBarProps) {
     const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
     return (
-        <div className={cn('h-1.5 w-full overflow-hidden rounded-full bg-edge', className)}>
+        <div
+            role="progressbar"
+            aria-label={label}
+            aria-valuemin={0}
+            aria-valuemax={max}
+            aria-valuenow={indeterminate ? undefined : value}
+            className={cn('h-1.5 w-full overflow-hidden rounded-full bg-edge', className)}
+        >
             {indeterminate ? (
                 <div className={cn('h-full w-1/3 rounded-full bg-accent animate-[indeterminate_1.2s_ease-in-out_infinite]', barClassName)} />
             ) : (

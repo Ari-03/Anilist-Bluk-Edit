@@ -1,15 +1,22 @@
 import { useMemo, useState } from 'react'
-import { useStore } from '@/store'
+import { selectCurrentLists, useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import CheckboxList from '@/components/sidebar/CheckboxList'
 import { Search, X } from 'lucide-react'
 
 export default function GenreFilter() {
-    const { filters, setFilters, getCurrentLists } = useStore()
+    const { filters, setFilters, currentLists } = useStore(
+        useShallow(s => ({
+            filters: s.filters,
+            setFilters: s.setFilters,
+            currentLists: selectCurrentLists(s),
+        }))
+    )
     const [search, setSearch] = useState('')
 
     // Derive genres (with counts) from the user's own library instead of a
     // hardcoded list, so the options always match what can actually be filtered
-    const lists = getCurrentLists()
+    const lists = currentLists
     const genreCounts = useMemo(() => {
         const counts = new Map<string, number>()
         for (const entry of lists) {
