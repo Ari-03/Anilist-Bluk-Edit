@@ -11,7 +11,7 @@ A powerful web application for efficiently managing your AniList anime and manga
 - **Bulk Operations** - Edit multiple entries simultaneously
 - **Advanced Filtering** - Find specific entries with powerful filters
 - **Real-time Updates** - Changes are immediately synced with AniList
-- **Dark Mode and accent colour** - Dark/light theme toggle, plus a choice of accent colour in Settings
+- **Dark Mode, accent colour and cover size** - Dark/light theme toggle, plus a choice of accent colour and cover size in Settings
 
 ### 📊 Bulk Edit Operations
 - Change status (Watching/Reading, Completed, Dropped, etc.)

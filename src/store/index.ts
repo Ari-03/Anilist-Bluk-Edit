@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { AccentColor, DEFAULT_ACCENT, parseAccent } from '@/lib/accent'
+import { COVER_SIZE, parseCoverSize } from '@/lib/coverSize'
 import {
     User,
     MediaList,
@@ -105,6 +106,8 @@ interface AppState {
     darkMode: boolean
     /** Tints the logo and the bulk edit controls; picked in Settings */
     accentColor: AccentColor
+    /** Narrowest width of a grid cover in px; picked in Settings (see lib/coverSize) */
+    coverSize: number
 }
 
 interface AppActions {
@@ -160,6 +163,7 @@ interface AppActions {
     clearNotifications: () => void
     toggleDarkMode: () => void
     setAccentColor: (accentColor: AccentColor) => void
+    setCoverSize: (coverSize: number) => void
 
     // Utility actions
     getCurrentLists: () => MediaList[]
@@ -250,6 +254,7 @@ const initialState: AppState = {
     notifications: [],
     darkMode: true, // dark-first; persisted preference wins for returning users
     accentColor: DEFAULT_ACCENT,
+    coverSize: COVER_SIZE.default,
 }
 
 /** Selector for the active media type's entries (use inside useStore so renders track list changes) */
@@ -592,9 +597,14 @@ export const useStore = create<AppState & AppActions>()(
                 // Re-applying later is harmless: applyFilters always reads the
                 // current filters, so a reset in the meantime simply wins
                 setSearch: (search) => {
+                    const wasSearching = !!get().filters.search
                     set(state => ({ filters: { ...state.filters, search } }))
                     clearTimeout(searchRefilter)
-                    searchRefilter = setTimeout(() => get().applyFilters(), SEARCH_DEBOUNCE_MS)
+                    // Starting or clearing a search adds or removes the chip row above the
+                    // list. Refilter at once then, so the list changes in the same frame as
+                    // that shift instead of jumping first and refiltering 150ms later.
+                    if (!search || !wasSearching) get().applyFilters()
+                    else searchRefilter = setTimeout(() => get().applyFilters(), SEARCH_DEBOUNCE_MS)
                 },
                 clearFilters: () => {
                     set({ filters: initialState.filters })
@@ -850,6 +860,7 @@ export const useStore = create<AppState & AppActions>()(
                 clearNotifications: () => set({ notifications: [] }),
                 toggleDarkMode: () => set(state => ({ darkMode: !state.darkMode })),
                 setAccentColor: (accentColor) => set({ accentColor }),
+                setCoverSize: (coverSize) => set({ coverSize: parseCoverSize(coverSize) }),
 
                 // Utility actions
                 getCurrentLists: () => {
@@ -889,6 +900,7 @@ export const useStore = create<AppState & AppActions>()(
                         user: active?.user ?? null,
                         accessToken: active?.accessToken ?? null,
                         accentColor: parseAccent(state.accentColor),
+                        coverSize: parseCoverSize(state.coverSize),
                         // Older versions persisted this without the lists it described
                         lastDataLoad: null,
                         activeAccountId: active ? state.activeAccountId ?? null : null,
@@ -900,6 +912,7 @@ export const useStore = create<AppState & AppActions>()(
                     activeAccountId: state.activeAccountId,
                     darkMode: state.darkMode,
                     accentColor: state.accentColor,
+                    coverSize: state.coverSize,
                     currentType: state.currentType,
                     viewMode: state.viewMode,
                     filters: state.filters,

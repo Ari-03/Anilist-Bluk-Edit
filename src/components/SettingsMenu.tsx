@@ -1,16 +1,20 @@
 import * as Popover from '@radix-ui/react-popover'
-import { Check, Settings } from 'lucide-react'
+import { Check, Grid2X2, Grid3X3, Settings } from 'lucide-react'
 import { useStore } from '@/store'
 import { ACCENT_COLORS } from '@/lib/accent'
+import { COVER_SIZE, coverSizeLabel } from '@/lib/coverSize'
 
 /**
- * Header popover for app preferences. Holds the accent colour, which tints
- * the logo and the bulk edit controls; picking one applies it at once and
- * the choice is saved in this browser.
+ * Header popover for app preferences: the accent colour, which tints the logo
+ * and the bulk edit controls, and the cover size of the grid. Each applies as
+ * it is changed and is saved in this browser.
  */
 export default function SettingsMenu() {
     const accentColor = useStore(s => s.accentColor)
     const setAccentColor = useStore(s => s.setAccentColor)
+    const coverSize = useStore(s => s.coverSize)
+    const setCoverSize = useStore(s => s.setCoverSize)
+    const viewMode = useStore(s => s.viewMode)
     const current = ACCENT_COLORS.find(accent => accent.id === accentColor)
 
     return (
@@ -52,6 +56,28 @@ export default function SettingsMenu() {
                             </button>
                         ))}
                     </div>
+
+                    <div className="mt-4 flex items-baseline justify-between">
+                        <label htmlFor="cover-size" className="text-xs font-medium text-fg-muted">Cover size</label>
+                        <span className="text-xs text-fg-subtle">{coverSizeLabel(coverSize)}</span>
+                    </div>
+                    {/* Smaller covers on the left, so more fit per row; the grid resizes as the slider moves */}
+                    <div className="mt-1 flex items-center gap-2.5 text-fg-subtle">
+                        <Grid3X3 className="h-4 w-4 flex-shrink-0" aria-hidden />
+                        <input
+                            id="cover-size"
+                            type="range"
+                            min={COVER_SIZE.min}
+                            max={COVER_SIZE.max}
+                            step={COVER_SIZE.step}
+                            value={coverSize}
+                            onChange={(e) => setCoverSize(Number(e.target.value))}
+                            aria-valuetext={coverSizeLabel(coverSize)}
+                            className="h-6 touch:h-11 w-full cursor-pointer [accent-color:rgb(var(--c-tint))]"
+                        />
+                        <Grid2X2 className="h-4 w-4 flex-shrink-0" aria-hidden />
+                    </div>
+                    {viewMode === 'list' && <p className="mt-1 text-xs text-fg-subtle">Applies in grid view.</p>}
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>

@@ -62,7 +62,7 @@ function MediaCard({
         >
             {/* Cover */}
             <div
-                className="relative aspect-[3/4] bg-raised"
+                className="cover relative aspect-[3/4] bg-raised"
                 style={coverColor ? { backgroundColor: coverColor } : undefined}
             >
                 {entry.media?.coverImage?.large ? (
@@ -85,16 +85,18 @@ function MediaCard({
                 )}
 
                 {/* Bottom scrim + title */}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/70 via-60% to-transparent pt-12 px-2.5 pb-2.5">
-                    <h3 className="text-sm font-semibold leading-snug text-white line-clamp-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]">
+                <div className="cover-text absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/70 via-60% to-transparent pt-12 px-2.5 pb-2.5">
+                    <h3 className="cover-title text-sm font-semibold leading-snug text-white line-clamp-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]">
                         {title}
                     </h3>
-                    <div className="mt-1 flex items-center justify-between text-xs text-white">
-                        <span className="flex items-center gap-1 tabular-nums">
-                            <ProgressIcon className="w-3 h-3" />
+                    {/* Wraps rather than truncates: on the smallest covers a long count
+                        (1000/1155) pushes the score to its own line and both stay readable */}
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-x-1 text-xs text-white">
+                        <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
+                            <ProgressIcon className="cover-progress-icon w-3 h-3 flex-shrink-0" />
                             {formatProgress(entry)}
                         </span>
-                        <span className="flex items-center gap-1 tabular-nums">
+                        <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
                             <Star className={cn('w-3 h-3', hasScore(entry) ? 'fill-current text-yellow-400' : 'text-white/40')} />
                             {formatScore(entry)}
                         </span>

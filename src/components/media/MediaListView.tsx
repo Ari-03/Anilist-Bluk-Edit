@@ -1,5 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
-import { AnimatePresence, m } from 'framer-motion'
+import { useCallback, useState } from 'react'
 import { selectCurrentLists, useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { AniListClient } from '@/lib/anilist'
@@ -8,17 +7,15 @@ import { getScoreRange, parseEditInput } from '@/lib/scoreFormat'
 import MediaCard from '@/components/media/MediaCard'
 import MediaListRow from '@/components/media/MediaListRow'
 import StatusSection from '@/components/media/StatusSection'
+import ListMotion from '@/components/media/ListMotion'
 import QuickEditDialog, { QuickEditValues } from '@/components/media/QuickEditDialog'
 import EmptyState from '@/components/media/EmptyState'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
 const EMPTY_EDIT: QuickEditValues = { score: '', progress: '', notes: '' }
 
-// Layout animation reflows every card on each filter keystroke; past this many
-// entries it costs more than it shows, so cards just appear in place
-const LAYOUT_ANIMATION_LIMIT = 150
-// Only the first screenful staggers in on first load
-const STAGGER_LIMIT = 24
+// Past this many entries, off-screen ones skip layout and paint until scrolled near
+const CONTENT_VISIBILITY_FROM = 150
 
 // Mirrors the status sort order in the store's applyFilters()
 const STATUS_SECTION_ORDER: MediaListStatus[] = [
@@ -83,11 +80,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
     const [savingEdit, setSavingEdit] = useState(false)
     const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null)
     const [deletingSingle, setDeletingSingle] = useState(false)
-
-    // Stagger card entrances only on the first load of data
-    const hasStaggeredRef = useRef(false)
-    const staggerThisRender = !hasStaggeredRef.current && filteredEntries.length > 0
-    if (filteredEntries.length > 0) hasStaggeredRef.current = true
 
     const scoreFormat = user?.mediaListOptions?.scoreFormat
     const scoreRange = getScoreRange(scoreFormat)
@@ -197,10 +189,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
     }
 
     const isGrid = viewMode === 'grid'
-    // Two covers per row on phones; wider screens fit as many ~160px covers as the width allows
-    const containerClass = isGrid
-        ? 'grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-4'
-        : 'flex flex-col gap-1.5'
+    const containerClass = isGrid ? 'cover-grid' : 'flex flex-col gap-1.5'
 
     // Group entries by watch status; sections render only when more than one
     // status is present (single-status views stay flat)
@@ -222,89 +211,78 @@ export default function MediaListView({ client }: MediaListViewProps) {
     const showSections = orderedStatuses.length > 1
     const collapsedForType = collapsedStatusSections[currentType] || []
 
-    const animateLayout = filteredEntries.length <= LAYOUT_ANIMATION_LIMIT
+    const deferOffscreen = filteredEntries.length > CONTENT_VISIBILITY_FROM
     const editedEntry = editingEntry === null ? null : currentLists.find(e => e.id === editingEntry) ?? null
     const selectionActive = bulkEditMode && selectedEntries.size > 0
 
-    // `offset` is the section's position in the whole list, so the stagger
-    // budget covers the first screenful overall rather than each section
-    const renderEntries = (entries: MediaList[], offset = 0) => (
+    const renderEntries = (entries: MediaList[]) => (
         <div className={containerClass}>
-            <AnimatePresence mode="popLayout">
-                {entries.map((entry, index) => {
-                        const shared = {
-                            entry,
-                            currentType,
-                            bulkEditMode,
-                            selected: selectedEntries.has(entry.id),
-                            selectionActive,
-                            showStatus: !showSections,
-                            syncState: entrySync[entry.id],
-                            onToggleSelect: toggleEntrySelection,
-                            onStartEdit: handleStartEdit,
-                            onDelete: handleDelete,
-                        }
+            {entries.map(entry => {
+                const shared = {
+                    entry,
+                    currentType,
+                    bulkEditMode,
+                    selected: selectedEntries.has(entry.id),
+                    selectionActive,
+                    showStatus: !showSections,
+                    syncState: entrySync[entry.id],
+                    onToggleSelect: toggleEntrySelection,
+                    onStartEdit: handleStartEdit,
+                    onDelete: handleDelete,
+                }
 
-                        return (
-                            <m.div
-                                key={entry.id}
-                                layout={animateLayout ? 'position' : false}
-                                initial={{ opacity: 0, scale: 0.96 }}
-                                animate={{
-                                    opacity: 1,
-                                    scale: 1,
-                                    transition: {
-                                        duration: 0.25,
-                                        delay: staggerThisRender && offset + index < STAGGER_LIMIT ? (offset + index) * 0.02 : 0,
-                                    },
-                                }}
-                                exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.18 } }}
-                                transition={{ layout: { type: 'spring', stiffness: 350, damping: 30 } }}
-                                // Big lists skip layout work for off-screen cards (layout animation is off there anyway)
-                                className={animateLayout ? undefined : isGrid
-                                    ? '[content-visibility:auto] [contain-intrinsic-size:auto_280px]'
-                                    : '[content-visibility:auto] [contain-intrinsic-size:auto_62px]'}
-                            >
-                                {isGrid ? <MediaCard {...shared} /> : <MediaListRow {...shared} />}
-                            </m.div>
-                        )
-                    })}
-            </AnimatePresence>
+                return (
+                    // data-entry-id is how ListMotion finds each entry to animate it
+                    <div
+                        key={entry.id}
+                        data-entry-id={entry.id}
+                        // content-visibility clips what an entry paints outside its box; the
+                        // margin leaves room for a card's hover lift and shadow
+                        className={!deferOffscreen ? undefined : isGrid
+                            ? '[content-visibility:auto] [contain-intrinsic-size:auto_280px] [overflow-clip-margin:12px]'
+                            : '[content-visibility:auto] [contain-intrinsic-size:auto_62px] [overflow-clip-margin:12px]'}
+                    >
+                        {isGrid ? <MediaCard {...shared} /> : <MediaListRow {...shared} />}
+                    </div>
+                )
+            })}
         </div>
     )
 
     return (
         <>
-            {showSections ? (
-                <div className="space-y-4">
-                    {orderedStatuses.map((status, i) => {
-                        const entries = statusGroups.get(status)!
-                        const offset = orderedStatuses.slice(0, i).reduce((n, s) => n + statusGroups.get(s)!.length, 0)
-                        const sectionSelected = entries.reduce(
-                            (n, entry) => n + (selectedEntries.has(entry.id) ? 1 : 0),
-                            0
-                        )
-                        return (
-                            <StatusSection
-                                key={status}
-                                status={status}
-                                mediaType={currentType}
-                                count={entries.length}
-                                collapsed={collapsedForType.includes(status)}
-                                onToggleCollapsed={() => toggleStatusSection(currentType, status)}
-                                bulkEditMode={bulkEditMode}
-                                selectedCount={sectionSelected}
-                                onSelectSection={() => selectEntries(entries.map(e => e.id))}
-                                onDeselectSection={() => deselectEntries(entries.map(e => e.id))}
-                            >
-                                {renderEntries(entries, offset)}
-                            </StatusSection>
-                        )
-                    })}
-                </div>
-            ) : (
-                renderEntries(filteredEntries)
-            )}
+            {/* Entries glide to their new places when the list is searched, filtered, sorted or edited */}
+            <ListMotion entries={filteredEntries} layoutKey={`${currentType}-${viewMode}`}>
+                {showSections ? (
+                    <div className="space-y-4">
+                        {orderedStatuses.map(status => {
+                            const entries = statusGroups.get(status)!
+                            const sectionSelected = entries.reduce(
+                                (n, entry) => n + (selectedEntries.has(entry.id) ? 1 : 0),
+                                0
+                            )
+                            return (
+                                <StatusSection
+                                    key={status}
+                                    status={status}
+                                    mediaType={currentType}
+                                    count={entries.length}
+                                    collapsed={collapsedForType.includes(status)}
+                                    onToggleCollapsed={() => toggleStatusSection(currentType, status)}
+                                    bulkEditMode={bulkEditMode}
+                                    selectedCount={sectionSelected}
+                                    onSelectSection={() => selectEntries(entries.map(e => e.id))}
+                                    onDeselectSection={() => deselectEntries(entries.map(e => e.id))}
+                                >
+                                    {renderEntries(entries)}
+                                </StatusSection>
+                            )
+                        })}
+                    </div>
+                ) : (
+                    renderEntries(filteredEntries)
+                )}
+            </ListMotion>
 
             <QuickEditDialog
                 entry={editedEntry}
