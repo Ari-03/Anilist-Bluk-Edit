@@ -1,4 +1,5 @@
 const defaultTheme = require('tailwindcss/defaultTheme')
+const plugin = require('tailwindcss/plugin')
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -30,9 +31,9 @@ module.exports = {
                     strong: 'rgb(var(--c-accent-strong) / <alpha-value>)',
                 },
                 'on-accent': 'rgb(var(--c-on-accent) / <alpha-value>)',
-                purple: {
-                    DEFAULT: 'rgb(var(--c-purple) / <alpha-value>)',
-                    hover: 'rgb(var(--c-purple-hover) / <alpha-value>)',
+                tint: {
+                    DEFAULT: 'rgb(var(--c-tint) / <alpha-value>)',
+                    hover: 'rgb(var(--c-tint-hover) / <alpha-value>)',
                 },
                 success: 'rgb(var(--c-success) / <alpha-value>)',
                 danger: 'rgb(var(--c-danger) / <alpha-value>)',
@@ -68,5 +69,8 @@ module.exports = {
             },
         },
     },
-    plugins: [],
+    plugins: [
+        // `touch:` styles apply on finger-driven devices, where controls need 44px targets
+        plugin(({ addVariant }) => addVariant('touch', '@media (pointer: coarse)')),
+    ],
 }

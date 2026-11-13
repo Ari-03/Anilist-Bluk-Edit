@@ -13,12 +13,19 @@ const inter = Inter({
 })
 
 export default function App({ Component, pageProps }: AppProps) {
-    const darkMode = useStore(s => s.darkMode)
 
-    // public/theme.js sets the class before paint; this keeps it in sync on toggle
+    // public/theme.js sets the theme and accent before paint; this keeps <html>
+    // in sync when they change. Subscribing here, rather than reading the store
+    // during render, matters: a saved value that differs from the default would
+    // otherwise re-render the app mid-hydration, which React reports as an error.
     useEffect(() => {
-        document.documentElement.classList.toggle('dark', darkMode)
-    }, [darkMode])
+        const apply = ({ darkMode, accentColor }: ReturnType<typeof useStore.getState>) => {
+            document.documentElement.classList.toggle('dark', darkMode)
+            document.documentElement.dataset.accent = accentColor
+        }
+        apply(useStore.getState())
+        return useStore.subscribe(apply)
+    }, [])
 
     return (
         <>

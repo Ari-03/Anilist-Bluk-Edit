@@ -19,11 +19,11 @@ export default function PartialFailureBar({ failedCount, reason, onRetry, onDism
                 </span>
             </span>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-                <button onClick={onRetry} className="btn-secondary h-8 px-3 text-xs">
+                <button onClick={onRetry} className="btn-secondary h-9 touch:h-11 px-3">
                     <RotateCcw className="w-3.5 h-3.5" />
                     Retry failed
                 </button>
-                <button onClick={onDismiss} className="btn-icon w-8 h-8" title="Dismiss">
+                <button onClick={onDismiss} className="btn-icon" title="Dismiss">
                     <X className="w-4 h-4" />
                 </button>
             </div>

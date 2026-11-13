@@ -1,8 +1,8 @@
-import { memo, ReactNode } from 'react'
+import { memo } from 'react'
 import { Image as IKImage } from '@imagekit/next'
 import { MediaList, MediaType } from '@/types/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'
-import { formatProgress, formatScore, hasScore, formatMediaFormat } from '@/lib/entryDisplay'
+import { formatProgress, formatScore, hasScore, notableFormat } from '@/lib/entryDisplay'
 import { cn } from '@/lib/utils'
 import DefaultCover from '@/components/DefaultCover'
 import { Star, ExternalLink, Edit3, Trash2, Check, Loader2, AlertCircle } from 'lucide-react'
@@ -19,9 +19,13 @@ interface MediaListRowProps {
     onToggleSelect: (id: number) => void
     onStartEdit: (entry: MediaList) => void
     onDelete: (entry: MediaList) => void
-    editForm?: ReactNode
 }
 
+/**
+ * One entry as a compact row. From md up the status, progress, score and
+ * format sit in fixed-width columns so they line up down the list; on phones
+ * they wrap under the title.
+ */
 function MediaListRow({
     entry,
     currentType,
@@ -33,25 +37,26 @@ function MediaListRow({
     onToggleSelect,
     onStartEdit,
     onDelete,
-    editForm,
 }: MediaListRowProps) {
     const title = entry.media?.title?.userPreferred || entry.media?.title?.romaji || 'Unknown'
+    const format = notableFormat(entry.media?.format, currentType)
 
+    // The whole row is one target: it selects in bulk mode and opens the entry otherwise
     const handleRowClick = (e: React.MouseEvent) => {
-        if (!bulkEditMode) return
         const target = e.target as HTMLElement
         if (target.closest('button, a, input, select, textarea')) return
-        onToggleSelect(entry.id)
+        if (bulkEditMode) onToggleSelect(entry.id)
+        else onStartEdit(entry)
     }
 
     return (
         <div
             className={cn(
-                'group relative card p-3 flex items-center gap-3 transition-all duration-200',
-                bulkEditMode && 'cursor-pointer',
-                selected && 'ring-2 ring-purple ring-offset-2 ring-offset-page',
+                'group relative card px-3 py-2 flex items-center gap-3 cursor-pointer transition-all duration-200 hover:bg-raised',
+                // Inset so the outline survives the list's content-visibility paint containment
+                selected && 'ring-2 ring-inset ring-tint',
                 selectionActive && !selected && !syncState && 'opacity-60 hover:opacity-100',
-                syncState === 'error' && 'ring-2 ring-danger',
+                syncState === 'error' && 'ring-2 ring-inset ring-danger',
                 syncState === 'pending' && 'opacity-70'
             )}
             onClick={handleRowClick}
@@ -64,10 +69,11 @@ function MediaListRow({
                         onToggleSelect(entry.id)
                     }}
                     className={cn(
-                        'flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-150',
+                        // The ::before pads the 20px badge out to a 44px touch target
+                        'relative flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-150 before:absolute before:-inset-3',
                         selected
-                            ? 'bg-purple border-purple text-white'
-                            : 'border-edge-strong text-transparent hover:border-purple'
+                            ? 'bg-tint border-tint text-white'
+                            : 'border-edge-strong text-transparent hover:border-tint'
                     )}
                     role="checkbox"
                     aria-checked={selected}
@@ -79,47 +85,41 @@ function MediaListRow({
             )}
 
             {/* Thumb */}
-            <div className="w-11 h-[60px] rounded-md overflow-hidden flex-shrink-0 relative bg-raised">
+            <div className="w-8 h-11 rounded overflow-hidden flex-shrink-0 relative bg-raised">
                 {entry.media?.coverImage?.medium ? (
                     <IKImage
                         src={entry.media.coverImage.medium}
-                        alt={title}
+                        alt=""
                         fill
                         style={{ objectFit: 'cover' }}
-                        sizes="44px"
+                        sizes="32px"
                         transformation={[{ quality: 65, format: 'auto' }]}
                         loading="lazy"
                     />
                 ) : (
-                    <DefaultCover className="w-full h-full rounded-md" size="small" />
+                    <DefaultCover className="w-full h-full rounded" size="small" />
                 )}
             </div>
 
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-fg truncate">{title}</h3>
-                {editForm ? (
-                    <div className="mt-2">{editForm}</div>
-                ) : (
-                    <div className="mt-1 flex items-center gap-3 text-xs text-fg-muted">
-                        {showStatus && entry.status && (
-                            <span className="flex items-center gap-1.5">
-                                <span className={cn('w-1.5 h-1.5 rounded-full', getStatusColor(entry.status))} />
-                                {getStatusLabel(entry.status, currentType)}
-                            </span>
-                        )}
-                        <span className="tabular-nums">{formatProgress(entry)}</span>
-                        <span className="flex items-center gap-1 tabular-nums">
-                            <Star className={cn('w-3 h-3', hasScore(entry) ? 'fill-current text-yellow-400' : 'text-fg-subtle')} />
-                            {formatScore(entry)}
+            {/* Title, then the numbers as aligned columns */}
+            <div className="flex-1 min-w-0 md:flex md:items-center md:gap-4">
+                <div className="flex min-w-0 items-baseline gap-2 md:flex-1">
+                    <h3 className="text-sm font-semibold text-fg truncate">{title}</h3>
+                    {format && <span className="flex-shrink-0 text-xs text-fg-subtle">{format}</span>}
+                </div>
+                <div className="mt-0.5 md:mt-0 flex items-center gap-3 md:gap-4 text-xs text-fg-muted">
+                    {showStatus && entry.status && (
+                        <span className="flex items-center gap-1.5 md:w-24">
+                            <span className={cn('w-1.5 h-1.5 rounded-full', getStatusColor(entry.status))} />
+                            {getStatusLabel(entry.status, currentType)}
                         </span>
-                        {entry.media?.format && (
-                            <span className="hidden sm:inline text-fg-subtle">
-                                {formatMediaFormat(entry.media.format)}
-                            </span>
-                        )}
-                    </div>
-                )}
+                    )}
+                    <span className="tabular-nums md:w-20 md:text-right">{formatProgress(entry)}</span>
+                    <span className="flex items-center gap-1 tabular-nums md:w-12 md:justify-end">
+                        <Star className={cn('w-3 h-3', hasScore(entry) ? 'fill-current text-yellow-400' : 'text-fg-subtle')} />
+                        {formatScore(entry)}
+                    </span>
+                </div>
             </div>
 
             {/* Sync badge */}
@@ -130,12 +130,15 @@ function MediaListRow({
                 </span>
             )}
 
-            {/* Actions */}
-            {!editForm && (
-                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
+            {/* Shortcuts laid over the row's right edge, so they reserve no space. Shown
+                on hover with a mouse and on keyboard focus everywhere. Touch has no
+                hover, so taps pass through to the row, which opens the entry where
+                the same actions are labelled buttons */}
+            {!bulkEditMode && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-md bg-raised opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:pointer-events-none focus-within:pointer-events-auto transition-opacity duration-150">
                     <button
                         onClick={() => onStartEdit(entry)}
-                        className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-raised transition-colors"
+                        className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-edge/60 transition-colors"
                         title="Quick edit"
                     >
                         <Edit3 className="w-4 h-4" />
@@ -144,7 +147,7 @@ function MediaListRow({
                         href={entry.media?.siteUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-raised transition-colors"
+                        className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-edge/60 transition-colors"
                         title="View on AniList"
                     >
                         <ExternalLink className="w-4 h-4" />

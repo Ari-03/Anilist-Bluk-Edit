@@ -8,7 +8,7 @@ import { getScoreRange, parseEditInput } from '@/lib/scoreFormat'
 import MediaCard from '@/components/media/MediaCard'
 import MediaListRow from '@/components/media/MediaListRow'
 import StatusSection from '@/components/media/StatusSection'
-import QuickEditForm, { QuickEditValues } from '@/components/media/QuickEditForm'
+import QuickEditDialog, { QuickEditValues } from '@/components/media/QuickEditDialog'
 import EmptyState from '@/components/media/EmptyState'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
@@ -151,6 +151,8 @@ export default function MediaListView({ client }: MediaListViewProps) {
             await client.deleteMediaListEntry(deleteTarget.id)
             removeMediaListEntry(deleteTarget.id)
             addNotification({ type: 'success', message: `Deleted “${deleteTarget.title}”` })
+            // Deleting from the edit dialog closes it along with the confirmation
+            if (deleteTarget.id === editingEntry) closeEdit()
             setDeleteTarget(null)
         } catch (error) {
             console.error('Failed to delete entry:', error)
@@ -195,9 +197,10 @@ export default function MediaListView({ client }: MediaListViewProps) {
     }
 
     const isGrid = viewMode === 'grid'
+    // Two covers per row on phones; wider screens fit as many ~160px covers as the width allows
     const containerClass = isGrid
-        ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4'
-        : 'flex flex-col gap-2'
+        ? 'grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-4'
+        : 'flex flex-col gap-1.5'
 
     // Group entries by watch status; sections render only when more than one
     // status is present (single-status views stay flat)
@@ -220,6 +223,7 @@ export default function MediaListView({ client }: MediaListViewProps) {
     const collapsedForType = collapsedStatusSections[currentType] || []
 
     const animateLayout = filteredEntries.length <= LAYOUT_ANIMATION_LIMIT
+    const editedEntry = editingEntry === null ? null : currentLists.find(e => e.id === editingEntry) ?? null
     const selectionActive = bulkEditMode && selectedEntries.size > 0
 
     // `offset` is the section's position in the whole list, so the stagger
@@ -228,22 +232,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
         <div className={containerClass}>
             <AnimatePresence mode="popLayout">
                 {entries.map((entry, index) => {
-                        const editForm =
-                            editingEntry === entry.id ? (
-                                <QuickEditForm
-                                    entry={entry}
-                                    values={editValues}
-                                    onChange={setEditValues}
-                                    onSave={() => handleSaveEdit(entry.mediaId)}
-                                    onCancel={closeEdit}
-                                    scoreRange={scoreRange}
-                                    currentType={currentType}
-                                    layout={isGrid ? 'stacked' : 'row'}
-                                    busy={savingEdit}
-                                    error={editError}
-                                />
-                            ) : undefined
-
                         const shared = {
                             entry,
                             currentType,
@@ -255,7 +243,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
                             onToggleSelect: toggleEntrySelection,
                             onStartEdit: handleStartEdit,
                             onDelete: handleDelete,
-                            editForm,
                         }
 
                         return (
@@ -275,8 +262,8 @@ export default function MediaListView({ client }: MediaListViewProps) {
                                 transition={{ layout: { type: 'spring', stiffness: 350, damping: 30 } }}
                                 // Big lists skip layout work for off-screen cards (layout animation is off there anyway)
                                 className={animateLayout ? undefined : isGrid
-                                    ? '[content-visibility:auto] [contain-intrinsic-size:auto_320px]'
-                                    : '[content-visibility:auto] [contain-intrinsic-size:auto_84px]'}
+                                    ? '[content-visibility:auto] [contain-intrinsic-size:auto_280px]'
+                                    : '[content-visibility:auto] [contain-intrinsic-size:auto_62px]'}
                             >
                                 {isGrid ? <MediaCard {...shared} /> : <MediaListRow {...shared} />}
                             </m.div>
@@ -318,6 +305,19 @@ export default function MediaListView({ client }: MediaListViewProps) {
             ) : (
                 renderEntries(filteredEntries)
             )}
+
+            <QuickEditDialog
+                entry={editedEntry}
+                values={editValues}
+                onChange={setEditValues}
+                onSave={() => editedEntry && handleSaveEdit(editedEntry.mediaId)}
+                onCancel={closeEdit}
+                onDelete={handleDelete}
+                scoreRange={scoreRange}
+                currentType={currentType}
+                busy={savingEdit}
+                error={editError}
+            />
 
             <ConfirmDialog
                 open={deleteTarget !== null}

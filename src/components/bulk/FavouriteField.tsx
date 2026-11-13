@@ -32,7 +32,7 @@ export default function FavouriteField({ id, value, onChange, disabled }: Favour
                     onChange={(e) => onChange((e.target.value || null) as FavouriteAction)}
                     title="The heart on anilist.co, shared by anime and manga"
                     className={cn(
-                        'select h-9 text-sm pl-8',
+                        'select pl-8',
                         value === 'add' && 'border-danger/40 bg-danger/10',
                         value === 'remove' && 'bg-raised'
                     )}

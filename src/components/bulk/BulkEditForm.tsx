@@ -32,7 +32,7 @@ export default function BulkEditForm({
 
     const fieldError = (field: 'score' | 'progress') =>
         !parsed.ok && parsed.field === field ? (
-            <p className="mt-1 text-[11px] text-danger leading-snug">{parsed.message}</p>
+            <p className="mt-1 text-xs text-danger leading-snug">{parsed.message}</p>
         ) : null
 
     return (
@@ -44,7 +44,7 @@ export default function BulkEditForm({
                         id={`${fieldId}-f1`}
                         value={options.status}
                         onChange={(e) => onChange({ ...options, status: e.target.value as MediaListStatus | '' })}
-                        className="select h-9 text-sm"
+                        className="select"
                         disabled={disabled}
                     >
                         <option value="">No change</option>
@@ -69,7 +69,7 @@ export default function BulkEditForm({
                         max={scoreRange.max}
                         step={scoreRange.step}
                         aria-invalid={invalidField === 'score'}
-                        className={cn('input h-9 text-sm', invalidField === 'score' && 'border-danger')}
+                        className={cn('input', invalidField === 'score' && 'border-danger')}
                         disabled={disabled}
                     />
                     {fieldError('score')}
@@ -86,7 +86,7 @@ export default function BulkEditForm({
                         placeholder="No change"
                         min={0}
                         aria-invalid={invalidField === 'progress'}
-                        className={cn('input h-9 text-sm', invalidField === 'progress' && 'border-danger')}
+                        className={cn('input', invalidField === 'progress' && 'border-danger')}
                         disabled={disabled}
                     />
                     {fieldError('progress')}
@@ -98,7 +98,7 @@ export default function BulkEditForm({
                         id={`${fieldId}-f4`}
                         value={options.private}
                         onChange={(e) => onChange({ ...options, private: e.target.value })}
-                        className="select h-9 text-sm"
+                        className="select"
                         disabled={disabled}
                     >
                         <option value="">No change</option>
@@ -113,7 +113,7 @@ export default function BulkEditForm({
                         id={`${fieldId}-f5`}
                         value={options.hiddenFromStatusLists}
                         onChange={(e) => onChange({ ...options, hiddenFromStatusLists: e.target.value })}
-                        className="select h-9 text-sm"
+                        className="select"
                         disabled={disabled}
                     >
                         <option value="">No change</option>
@@ -133,8 +133,8 @@ export default function BulkEditForm({
                 <div className="col-span-full">
                     <div className="flex items-baseline justify-between gap-2 mb-1">
                         <label htmlFor={`${fieldId}-f6`} className="text-xs font-medium text-fg-muted">Notes</label>
-                        <span className={cn('text-[11px] text-right', options.notes.trim() ? 'text-warning' : 'text-fg-subtle')}>
-                            Plain text · replaces existing notes
+                        <span className={cn('text-xs text-right', options.notes.trim() ? 'text-warning' : 'text-fg-subtle')}>
+                            Replaces existing notes
                         </span>
                     </div>
                     <textarea
@@ -143,7 +143,7 @@ export default function BulkEditForm({
                         value={options.notes}
                         onChange={(e) => onChange({ ...options, notes: e.target.value })}
                         placeholder="No change"
-                        className="input h-auto min-h-[4.5rem] max-h-40 py-2 text-sm leading-snug resize-y"
+                        className="input h-auto min-h-[4.5rem] max-h-40 py-2 leading-snug resize-y"
                         disabled={disabled}
                     />
                 </div>

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
+import { useStore } from '@/store'
 import Modal, { ModalTitle } from '@/components/ui/Modal'
 import SidebarContent from '@/components/sidebar/SidebarContent'
 
@@ -8,13 +9,15 @@ interface MobileSidebarProps {
     onClose: () => void
 }
 
-/** Slide-over drawer for filters on small screens */
+/** Slide-over filter drawer for screens narrower than lg (phones and portrait tablets) */
 export default function MobileSidebar({ open, onClose }: MobileSidebarProps) {
-    // The sidebar is inline from md up; close the drawer (and its overlay and
+    const shown = useStore(s => s.filteredEntries.length)
+
+    // The sidebar is inline from lg up; close the drawer (and its overlay and
     // scroll lock) if the window grows past that while it's open
     useEffect(() => {
         if (!open) return
-        const desktop = window.matchMedia('(min-width: 768px)')
+        const desktop = window.matchMedia('(min-width: 1024px)')
         const closeIfDesktop = () => desktop.matches && onClose()
         closeIfDesktop()
         desktop.addEventListener('change', closeIfDesktop)
@@ -22,15 +25,20 @@ export default function MobileSidebar({ open, onClose }: MobileSidebarProps) {
     }, [open, onClose])
 
     return (
-        <Modal open={open} onClose={onClose} variant="sheet-left" layer="z-drawer">
-            <div className="flex items-center justify-between p-2 pb-0 pl-4">
-                <ModalTitle className="sr-only">Filters</ModalTitle>
-                <span />
-                <button onClick={onClose} className="btn-icon" aria-label="Close filters">
-                    <X className="w-5 h-5" />
+        <Modal open={open} onClose={onClose} variant="sheet-left" layer="z-drawer" className="flex flex-col overflow-hidden">
+            <ModalTitle className="sr-only">Filters</ModalTitle>
+            <div className="flex-1 overflow-y-auto">
+                <SidebarContent inline />
+            </div>
+            <button onClick={onClose} className="btn-icon absolute right-2 top-2" aria-label="Close filters">
+                <X className="w-5 h-5" />
+            </button>
+            {/* The list updates live behind the drawer; this says so and gives filtering an obvious finish */}
+            <div className="border-t border-edge p-3">
+                <button onClick={onClose} className="btn-primary w-full">
+                    Show {shown.toLocaleString()} {shown === 1 ? 'entry' : 'entries'}
                 </button>
             </div>
-            <SidebarContent />
         </Modal>
     )
 }

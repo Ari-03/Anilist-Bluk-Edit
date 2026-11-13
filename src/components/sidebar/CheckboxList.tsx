@@ -16,7 +16,7 @@ export default function CheckboxList({ options, selected, onToggle }: CheckboxLi
             {options.map(option => (
                 <label
                     key={option.value}
-                    className="flex items-center gap-2.5 cursor-pointer rounded-md px-2 py-1.5 hover:bg-raised transition-colors"
+                    className="flex items-center gap-2.5 cursor-pointer rounded-md px-2 py-1.5 touch:min-h-11 hover:bg-raised transition-colors"
                 >
                     <input
                         type="checkbox"

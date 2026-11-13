@@ -14,8 +14,9 @@ import ListToolbar from '@/components/ListToolbar'
 import NotificationList from '@/components/NotificationList'
 import TokenLogin from '@/components/TokenLogin'
 import AccountSwitcher from '@/components/AccountSwitcher'
+import SettingsMenu from '@/components/SettingsMenu'
 import ProgressBar from '@/components/ui/ProgressBar'
-import { Layers, Moon, Sun, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { Layers, Moon, Sun, RotateCcw } from 'lucide-react'
 
 export default function Home() {
   const {
@@ -117,17 +118,10 @@ export default function Home() {
           <div className="mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setMobileFiltersOpen(true)}
-                  className="btn-icon md:hidden"
-                  title="Filters"
-                >
-                  <SlidersHorizontal className="w-5 h-5" />
-                </button>
                 <div className="w-8 h-8 rounded-lg brand-gradient flex items-center justify-center">
                   <Layers className="w-[18px] h-[18px] text-white" />
                 </div>
-                <h1 className="text-base font-bold text-fg hidden sm:block">
+                <h1 className="text-sm font-semibold text-fg hidden sm:block">
                   AniList Bulk Edit
                 </h1>
               </div>
@@ -150,6 +144,8 @@ export default function Home() {
                   {darkMode ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
                 </button>
 
+                <SettingsMenu />
+
                 <div className="w-px h-5 bg-edge mx-1.5" />
 
                 <AccountSwitcher />
@@ -167,9 +163,10 @@ export default function Home() {
           <LeftSidebar />
           <MobileSidebar open={mobileFiltersOpen} onClose={() => setMobileFiltersOpen(false)} />
 
-          <main className={`flex-1 min-w-0 ${bulkEditMode ? 'pb-32' : ''}`}>
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4 max-w-[1600px]">
-              <ListToolbar />
+          {/* Bottom padding keeps the last row clear of the floating bulk edit button / bar */}
+          <main className={`flex-1 min-w-0 ${bulkEditMode ? 'pb-32' : 'pb-20'}`}>
+            <div className="px-4 sm:px-6 lg:px-8 py-5 space-y-4">
+              <ListToolbar onOpenFilters={() => setMobileFiltersOpen(true)} />
               <ActiveFilterChips />
               <BulkEditPanel client={client} />
               {showSkeleton ? (

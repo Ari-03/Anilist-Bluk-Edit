@@ -19,10 +19,10 @@
     /* #E3EAF2 */
     --c-fg: 38 52 63;
     /* #26343F */
-    --c-fg-muted: 100 115 128;
-    /* #647380 */
-    --c-fg-subtle: 100 116 139;
-    /* #64748B: 4.8:1 on white */
+    --c-fg-muted: 90 103 115;
+    /* #5A6773: 5.1:1 on page */
+    --c-fg-subtle: 86 100 120;
+    /* #566478: 5.3:1 on page */
     /* Borders of form controls: 3:1 on surface (--c-edge is for dividers) */
     --c-edge-strong: 135 150 166;
     /* #8796A6 */
@@ -36,10 +36,12 @@
     /* #1A6FA8: 5.4:1 on white */
     --c-on-accent: 255 255 255;
 
-    /* Bulk edit / selection accent */
-    --c-purple: 147 51 234;
+    /* Tint: the user's accent colour (Settings), purple unless they pick another.
+       It colours the logo and everything that acts on the selection. `accent`
+       above stays AniList blue. */
+    --c-tint: 147 51 234;
     /* #9333EA: white text 5.4:1 */
-    --c-purple-hover: 126 34 206;
+    --c-tint-hover: 126 34 206;
     /* #7E22CE */
 
     /* Semantic colors are used both as text and as fills under white text,
@@ -51,12 +53,16 @@
     --c-warning: 180 83 9;
     /* #B45309 */
 
-    /* Entry status colors */
-    --c-status-current: 34 197 94;
-    --c-status-planning: 61 180 242;
+    /* Entry status colors. The light theme darkens the three that fall under
+       3:1 on the page; .dark restores the bright ones */
+    --c-status-current: 21 128 61;
+    /* #15803D */
+    --c-status-planning: 26 111 168;
+    /* #1A6FA8 */
     --c-status-completed: 146 86 243;
     --c-status-dropped: 236 74 94;
-    --c-status-paused: 245 158 11;
+    --c-status-paused: 180 83 9;
+    /* #B45309 */
     --c-status-repeating: 108 123 240;
 
     --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.08);
@@ -92,9 +98,52 @@
     --c-danger: 236 74 94;
     --c-warning: 245 158 11;
 
+    --c-status-current: 34 197 94;
+    --c-status-planning: 61 180 242;
+    --c-status-paused: 245 158 11;
+
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.25);
     --shadow-raised: 0 4px 12px rgb(0 0 0 / 0.35), 0 2px 4px rgb(0 0 0 / 0.25);
     --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.5), 0 4px 8px rgb(0 0 0 / 0.3);
+}
+
+/* Accent choices (ids in src/lib/accent.ts). Each passes 4.5:1 under white
+   text and 3:1 against both page colours, so one value serves both themes.
+   Set on <html> for the app, and on each swatch in the Settings picker. */
+[data-accent='purple'] {
+    --c-tint: 147 51 234;
+    /* #9333EA */
+    --c-tint-hover: 126 34 206;
+}
+
+[data-accent='blue'] {
+    --c-tint: 37 99 235;
+    /* #2563EB */
+    --c-tint-hover: 29 78 216;
+}
+
+[data-accent='teal'] {
+    --c-tint: 15 118 110;
+    /* #0F766E */
+    --c-tint-hover: 17 94 89;
+}
+
+[data-accent='green'] {
+    --c-tint: 21 128 61;
+    /* #15803D */
+    --c-tint-hover: 22 101 52;
+}
+
+[data-accent='pink'] {
+    --c-tint: 219 39 119;
+    /* #DB2777 */
+    --c-tint-hover: 190 24 93;
+}
+
+[data-accent='orange'] {
+    --c-tint: 194 65 12;
+    /* #C2410C */
+    --c-tint-hover: 154 52 18;
 }
 
 @layer base {
@@ -119,6 +168,11 @@
     ::-webkit-scrollbar-thumb:hover {
         @apply bg-fg-subtle;
     }
+
+    /* Search fields carry their own clear button; hide WebKit's duplicate */
+    input[type='search']::-webkit-search-cancel-button {
+        appearance: none;
+    }
 }
 
 @layer components {
@@ -131,38 +185,39 @@
 
     /* Buttons */
     .btn-primary {
-        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-accent-strong text-on-accent text-sm font-semibold transition-colors duration-150 hover:bg-accent-strong/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-accent-strong text-on-accent text-sm font-semibold transition-colors duration-150 hover:bg-accent-strong/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:bg-raised disabled:text-fg-subtle disabled:pointer-events-none touch:h-11;
     }
 
-    /* Bulk edit call-to-action */
-    .btn-purple {
-        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-purple text-white text-sm font-semibold transition-all duration-150 hover:bg-purple-hover hover:shadow-[0_0_16px_rgb(var(--c-purple)/0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-purple focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+    /* Bulk edit actions: the tint marks everything that acts on the selection */
+    .btn-tint {
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-tint text-white text-sm font-semibold transition-all duration-150 hover:bg-tint-hover hover:shadow-[0_0_16px_rgb(var(--c-tint)/0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-tint focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:bg-raised disabled:text-fg-subtle disabled:shadow-none disabled:pointer-events-none touch:h-11;
     }
 
     .btn-secondary {
-        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-raised text-fg text-sm font-semibold border border-edge transition-colors duration-150 hover:bg-edge/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-raised text-fg text-sm font-semibold border border-edge transition-colors duration-150 hover:bg-edge/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none touch:h-11;
     }
 
     .btn-danger {
-        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-danger text-white text-sm font-semibold transition-colors duration-150 hover:bg-danger/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-danger text-white text-sm font-semibold transition-colors duration-150 hover:bg-danger/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none touch:h-11;
     }
 
     .btn-ghost {
-        @apply inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg text-fg-muted text-sm font-medium transition-colors duration-150 hover:bg-raised hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none;
+        @apply inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg text-fg-muted text-sm font-medium transition-colors duration-150 hover:bg-raised hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none touch:h-11;
     }
 
     /* Icon-only button */
     .btn-icon {
-        @apply inline-flex items-center justify-center w-9 h-9 rounded-lg text-fg-muted transition-colors duration-150 hover:bg-raised hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none;
+        @apply inline-flex items-center justify-center w-9 h-9 rounded-lg text-fg-muted transition-colors duration-150 hover:bg-raised hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none touch:w-11 touch:h-11;
     }
 
-    /* Form controls */
+    /* Form controls. On touch they are 44px tall with 16px text, the size
+       below which iOS zooms the page when a field takes focus */
     .input {
-        @apply w-full h-10 px-3 rounded-lg border border-edge-strong bg-surface text-fg text-sm placeholder:text-fg-subtle transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:opacity-50;
+        @apply w-full h-10 px-3 rounded-lg border border-edge-strong bg-surface text-fg text-sm placeholder:text-fg-subtle transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:opacity-50 touch:h-11 touch:text-base;
     }
 
     .select {
-        @apply w-full h-10 pl-3 pr-8 rounded-lg border border-edge-strong bg-surface text-fg text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent appearance-none bg-no-repeat disabled:opacity-50;
+        @apply w-full h-10 pl-3 pr-8 rounded-lg border border-edge-strong bg-surface text-fg text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent appearance-none bg-no-repeat disabled:opacity-50 touch:h-11 touch:text-base;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23647380' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
         background-position: right 0.6rem center;
     }
@@ -179,9 +234,9 @@
         animation: spin 1s linear infinite;
     }
 
-    /* Brand gradient (login hero, wordmark accents) */
+    /* Logo mark (header, login hero): follows the accent colour */
     .brand-gradient {
-        background: linear-gradient(135deg, #3db4f2 0%, #2e86c1 60%, #9256f3 130%);
+        background: linear-gradient(135deg, rgb(var(--c-tint)) 0%, rgb(var(--c-tint-hover)) 100%);
     }
 }
 
