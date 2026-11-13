@@ -4,6 +4,7 @@ import { getStatusLabel } from '@/lib/anilist'
 import { getScoreRange, parseEditInput } from '@/lib/scoreFormat'
 import { BulkFormOptions } from '@/hooks/useBulkOperations'
 import CustomListsField from '@/components/bulk/CustomListsField'
+import FavouriteField from '@/components/bulk/FavouriteField'
 import PacerStatus from '@/components/bulk/PacerStatus'
 import { cn } from '@/lib/utils'
 
@@ -134,6 +135,14 @@ export default function BulkEditForm({
                         disabled={disabled}
                     />
                 </div>
+            </div>
+
+            <div className="border-t border-edge pt-4">
+                <FavouriteField
+                    value={options.favourite}
+                    onChange={(favourite) => onChange({ ...options, favourite })}
+                    disabled={disabled}
+                />
             </div>
 
             <div className="border-t border-edge pt-4">

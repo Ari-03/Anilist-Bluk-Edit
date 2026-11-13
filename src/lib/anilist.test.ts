@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { AniListClient } from './anilist'
+import { MediaType } from '@/types/anilist'
 
 const realFetch = globalThis.fetch
 afterEach(() => {
@@ -38,5 +39,17 @@ describe('AniListClient', () => {
         )
 
         expect(await new AniListClient('token').deleteMediaListEntry(5)).toEqual({ deleted: true })
+    })
+
+    // Keep last: the failure puts the shared pacer into its 61 s back-off
+    test('favourite toggles are never re-sent after a network failure', async () => {
+        let calls = 0
+        stubFetch(async () => {
+            calls++
+            throw new TypeError('Failed to fetch')
+        })
+        const toggling = new AniListClient('token').toggleFavourites([{ id: 1, type: MediaType.ANIME }])
+        expect(await toggling.then(() => 'sent', () => 'failed')).toBe('failed')
+        expect(calls).toBe(1)
     })
 })

@@ -39,6 +39,11 @@ export interface RequestOptions {
   signal?: AbortSignal
   /** Retry once on 5xx / timeout. Only for queries and idempotent mutations. */
   retryTransient?: boolean
+  /**
+   * Never re-send after a network-level failure. For toggles: if the request
+   * landed and only the reply was lost, a second send would undo it.
+   */
+  noResend?: boolean
 }
 
 /** Fields a list entry edit can change. `customLists` is the full membership, not a delta. */
@@ -180,7 +185,7 @@ export class AniListClient {
         if (typeof navigator !== 'undefined' && navigator.onLine === false) throw error
         // Penalize even when giving up, so queued requests still back off
         pacer.penalize(Date.now() + OPAQUE_FAILURE_PENALTY_MS)
-        if (rateLimitRetries++ < MAX_RATE_LIMIT_RETRIES) continue
+        if (!opts.noResend && rateLimitRetries++ < MAX_RATE_LIMIT_RETRIES) continue
         throw new AniListRequestError(429, [{ message: 'AniList is rate limiting requests. Try again in a minute.', status: 429 }])
       }
 
@@ -294,6 +299,8 @@ export class AniListClient {
                 coverImage { large medium color }
                 siteUrl
                 countryOfOrigin
+                isFavourite
+                isFavouriteBlocked
               }
             }
           }
@@ -436,6 +443,28 @@ export class AniListClient {
   }
 
   /** An entry that is already gone (e.g. a re-send after a lost reply) counts as deleted */
+  /**
+   * Aliased ToggleFavourite, one alias per media. AniList only flips the
+   * current state, so callers send just the media that differ (planFavourites)
+   * and nothing is ever re-sent: a batch AniList aborted may have flipped some
+   * entries anyway, so failures leave the state unknown until a refetch.
+   */
+  async toggleFavourites(
+    media: Array<{ id: number; type: MediaType }>,
+    opts?: RequestOptions
+  ): Promise<AliasResult<{ __typename: string }>[]> {
+    if (media.length === 0) return []
+    const defs = media.map((_, i) => `$id${i}: Int`).join(', ')
+    const fields = media.map((m, i) =>
+      `f${i}: ToggleFavourite(${m.type === MediaType.MANGA ? 'mangaId' : 'animeId'}: $id${i}) { __typename }`
+    )
+    const variables = Object.fromEntries(media.map((m, i) => [`id${i}`, m.id]))
+
+    const { query, aliasLines } = aliasedDocument('mutation', defs, fields)
+    const body = await this.exchange<Record<string, { __typename: string } | null>>(query, variables, { ...opts, noResend: true })
+    return splitAliases(body, media.map((_, i) => `f${i}`), aliasLines)
+  }
+
   async deleteMediaListEntry(id: number, opts?: RequestOptions): Promise<{ deleted: boolean }> {
     const mutation = `
       mutation DeleteMediaListEntry($id: Int!) {

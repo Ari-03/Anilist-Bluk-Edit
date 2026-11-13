@@ -5,6 +5,7 @@ import { errorMessage, isAlreadyDeleted } from '@/lib/graphql'
 import { isAbortError } from '@/lib/pacer'
 import { parseEditInput } from '@/lib/scoreFormat'
 import { applyCustomListChanges, CustomListAction } from '@/lib/customLists'
+import { FavouriteAction, planFavourites } from '@/lib/favourites'
 import { MediaList, MediaListStatus, MediaType } from '@/types/anilist'
 
 export interface BulkFormOptions {
@@ -14,6 +15,7 @@ export interface BulkFormOptions {
     private: string
     hiddenFromStatusLists: string
     notes: string
+    favourite: FavouriteAction
     customLists: Record<string, CustomListAction>
 }
 
@@ -24,6 +26,7 @@ export const EMPTY_BULK_OPTIONS: BulkFormOptions = {
     private: '',
     hiddenFromStatusLists: '',
     notes: '',
+    favourite: null,
     customLists: {}
 }
 
@@ -38,6 +41,8 @@ export function summarizeBulkChanges(options: BulkFormOptions, mediaType: MediaT
         changes.push(options.hiddenFromStatusLists === 'true' ? 'Hide from status lists' : 'Show in status lists')
     }
     if (options.notes.trim()) changes.push('Replace notes')
+    if (options.favourite === 'add') changes.push('Add to favourites')
+    if (options.favourite === 'remove') changes.push('Remove from favourites')
     for (const [name, action] of Object.entries(options.customLists)) {
         if (action === 'add') changes.push(`Add to “${name}”`)
         if (action === 'remove') changes.push(`Remove from “${name}”`)
@@ -165,6 +170,51 @@ const saveChunked = async (
         })
         signal.throwIfAborted()
     }
+}
+
+/**
+ * Favourite phase: toggles only the entries whose state differs. Returns the
+ * entries now in the target state; the rest are failed on the ledger. Any
+ * failure leaves AniList's state uncertain (see toggleFavourites), so the
+ * caller reloads the lists afterwards.
+ */
+const setFavourites = async (
+    client: AniListClient,
+    entries: MediaList[],
+    action: Exclude<FavouriteAction, null>,
+    ledger: Ledger,
+    signal: AbortSignal
+): Promise<{ done: MediaList[]; uncertain: boolean }> => {
+    const { target, toToggle, alreadyDone, blocked } = planFavourites(entries, action)
+    ledger.fail(blocked.map(e => e.id), "AniList doesn't allow favouriting this title")
+    const done = [...alreadyDone]
+    let uncertain = false
+
+    for (const batch of chunk(toToggle, CHUNK_SIZE)) {
+        let results
+        try {
+            const { currentType } = useStore.getState()
+            results = await client.toggleFavourites(
+                batch.map(e => ({ id: e.mediaId, type: e.media?.type ?? currentType })),
+                { signal }
+            )
+        } catch (error) {
+            if (isAbortError(error)) throw error
+            uncertain = true
+            ledger.fail(batch.map(e => e.id), errorMessage(error))
+            continue
+        }
+        const flipped = batch.filter((_, i) => results[i].ok)
+        useStore.getState().setMediaFavourite(flipped.map(e => e.id), target)
+        done.push(...flipped)
+        results.forEach((r, i) => {
+            if (r.ok) return
+            uncertain = true
+            ledger.fail([batch[i].id], r.message)
+        })
+        signal.throwIfAborted()
+    }
+    return { done, uncertain }
 }
 
 /** Fast path: UpdateMediaListEntries per chunk; a chunk it rejects falls back to per-entry saves */
@@ -297,7 +347,10 @@ export function useBulkOperations(client: AniListClient | null) {
         const customListChanges = options.customLists
         const hasCustomListChanges = Object.values(customListChanges).some(v => v === 'add' || v === 'remove')
 
-        if (Object.keys(updates).length === 0 && !hasCustomListChanges) {
+        const favourite = options.favourite
+        const hasEntryUpdates = Object.keys(updates).length > 0 || hasCustomListChanges
+
+        if (!hasEntryUpdates && !favourite) {
             store.addNotification({ type: 'warning', message: 'Pick at least one field to change' })
             return false
         }
@@ -305,14 +358,16 @@ export function useBulkOperations(client: AniListClient | null) {
         let entries = entriesOverride ?? store.getSelectedEntries()
         if (entries.length === 0 || !claim('update')) return false
 
-        // customLists is a full-replacement array on AniList's side, so a write
-        // built from stale entry data silently drops memberships added
-        // elsewhere. Refresh first when the local snapshot is past its window.
-        if (hasCustomListChanges) {
+        // Both need current data: customLists is a full-replacement array, so a
+        // write built from stale entries drops memberships added elsewhere, and
+        // favourites only toggle. A retry always refreshes for favourites, since
+        // the failed attempt may have flipped some of them.
+        if (hasCustomListChanges || favourite) {
             const { lastDataLoad, user } = store
             const fiveMinutes = 5 * 60 * 1000
-            if (user && (!lastDataLoad || Date.now() - lastDataLoad > fiveMinutes)) {
-                store.addNotification({ type: 'info', message: 'Refreshing list data before editing custom lists…' })
+            const stale = !lastDataLoad || Date.now() - lastDataLoad > fiveMinutes
+            if (user && (stale || (favourite && entriesOverride))) {
+                store.addNotification({ type: 'info', message: 'Refreshing list data before editing…' })
                 try {
                     await store.fetchMediaLists(user.id, useStore.getState().currentType, true)
                     const fresh = useStore.getState()
@@ -322,7 +377,7 @@ export function useBulkOperations(client: AniListClient | null) {
                     entries = [...fresh.animeLists, ...fresh.mangaLists]
                         .filter(e => idSet.has(e.id) && (entriesOverride !== undefined || fresh.selectedEntries.has(e.id)))
                 } catch {
-                    store.addNotification({ type: 'error', message: 'Could not refresh list data — aborting custom list changes' })
+                    store.addNotification({ type: 'error', message: 'Could not refresh list data, so nothing was changed' })
                     release()
                     return false
                 }
@@ -350,13 +405,28 @@ export function useBulkOperations(client: AniListClient | null) {
         lastOperationRef.current = { type: 'update', options }
         const { ledger, signal } = startRun(entries)
 
+        let favouritesUncertain = false
         try {
-            if (!hasCustomListChanges) {
-                await updateFast(client, entries, updates, ledger, signal)
+            // Favourites first; an entry whose favourite failed skips the rest
+            let remaining = entries
+            if (favourite) {
+                const result = await setFavourites(client, entries, favourite, ledger, signal)
+                favouritesUncertain = result.uncertain
+                remaining = result.done
+                if (!hasEntryUpdates) {
+                    ledger.ok(remaining.map(e => e.id))
+                    remaining = []
+                }
+            }
+
+            if (remaining.length === 0) {
+                // nothing left to send
+            } else if (!hasCustomListChanges) {
+                await updateFast(client, remaining, updates, ledger, signal)
             } else {
                 await saveChunked(
                     client,
-                    entries.map(entry => ({
+                    remaining.map(entry => ({
                         id: entry.id,
                         mediaId: entry.mediaId,
                         updates: { ...updates, customLists: applyCustomListChanges(entry.customLists, customListChanges) },
@@ -368,6 +438,11 @@ export function useBulkOperations(client: AniListClient | null) {
         } catch (error) {
             if (!isAbortError(error)) console.error('Bulk update failed:', error)
         } finally {
+            // Show AniList's real favourite state before anyone retries
+            const { user } = useStore.getState()
+            if (favouritesUncertain && user) {
+                await useStore.getState().fetchMediaLists(user.id, useStore.getState().currentType, true).catch(() => {})
+            }
             finishRun('update', ledger)
         }
         return true
