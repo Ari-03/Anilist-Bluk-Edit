@@ -3,8 +3,8 @@ import { pacer } from '@/lib/pacer'
 import { cn } from '@/lib/utils'
 
 /**
- * Read-only line showing the shared request pacer: AniList's per-minute
- * budget, what's left in the current window, and any back-off in progress.
+ * Shown during a bulk run only while the shared pacer is backing off from
+ * AniList's rate limit, with a countdown; renders nothing otherwise.
  */
 export default function PacerStatus({ className }: { className?: string }) {
     const snapshot = useSyncExternalStore(pacer.subscribe, pacer.getSnapshot, pacer.getSnapshot)
@@ -18,14 +18,12 @@ export default function PacerStatus({ className }: { className?: string }) {
         return () => clearInterval(timer)
     }, [paused])
 
-    const limit = snapshot.advertisedLimit ?? snapshot.perMinute
-    const secondsLeft = paused && snapshot.penalizedUntil ? Math.ceil((snapshot.penalizedUntil - now) / 1000) : 0
+    if (!paused || !snapshot.penalizedUntil) return null
+    const secondsLeft = Math.ceil((snapshot.penalizedUntil - now) / 1000)
 
     return (
-        <p className={cn('text-[11px] text-fg-subtle tabular-nums', className)}>
-            AniList allows {limit} requests/min
-            {snapshot.remaining !== null && ` · ${snapshot.remaining} left this minute`}
-            {paused && <span className="text-warning"> · backing off {secondsLeft}s</span>}
+        <p className={cn('text-[11px] text-warning tabular-nums', className)}>
+            Waiting for AniList&apos;s rate limit · {secondsLeft}s
         </p>
     )
 }

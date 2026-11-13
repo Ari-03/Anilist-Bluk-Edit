@@ -5,7 +5,6 @@ import { getScoreRange, parseEditInput } from '@/lib/scoreFormat'
 import { BulkFormOptions } from '@/hooks/useBulkOperations'
 import CustomListsField from '@/components/bulk/CustomListsField'
 import FavouriteField from '@/components/bulk/FavouriteField'
-import PacerStatus from '@/components/bulk/PacerStatus'
 import { cn } from '@/lib/utils'
 
 interface BulkEditFormProps {
@@ -123,26 +122,31 @@ export default function BulkEditForm({
                     </select>
                 </div>
 
-                <div>
-                    <label htmlFor={`${fieldId}-f6`} className="block text-xs font-medium text-fg-muted mb-1">Notes</label>
-                    <input
-                        id={`${fieldId}-f6`}
-                        type="text"
-                        value={options.notes}
-                        onChange={(e) => onChange({ ...options, notes: e.target.value })}
-                        placeholder="No change"
-                        className="input h-9 text-sm"
-                        disabled={disabled}
-                    />
-                </div>
-            </div>
-
-            <div className="border-t border-edge pt-4">
                 <FavouriteField
+                    id={`${fieldId}-fav`}
                     value={options.favourite}
                     onChange={(favourite) => onChange({ ...options, favourite })}
                     disabled={disabled}
                 />
+
+                {/* AniList list notes are plain text (no Markdown), line breaks kept */}
+                <div className="col-span-full">
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                        <label htmlFor={`${fieldId}-f6`} className="text-xs font-medium text-fg-muted">Notes</label>
+                        <span className={cn('text-[11px] text-right', options.notes.trim() ? 'text-warning' : 'text-fg-subtle')}>
+                            Plain text · replaces existing notes
+                        </span>
+                    </div>
+                    <textarea
+                        id={`${fieldId}-f6`}
+                        rows={3}
+                        value={options.notes}
+                        onChange={(e) => onChange({ ...options, notes: e.target.value })}
+                        placeholder="No change"
+                        className="input h-auto min-h-[4.5rem] max-h-40 py-2 text-sm leading-snug resize-y"
+                        disabled={disabled}
+                    />
+                </div>
             </div>
 
             <div className="border-t border-edge pt-4">
@@ -155,9 +159,6 @@ export default function BulkEditForm({
                 />
             </div>
 
-            <div className="border-t border-edge pt-3">
-                <PacerStatus />
-            </div>
         </div>
     )
 }
