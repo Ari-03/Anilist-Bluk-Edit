@@ -216,11 +216,9 @@ export function useBulkOperations(client: AniListClient | null) {
     const isDeleting = operation === 'delete'
     const isBusy = operation !== null
 
-    const startRun = (kind: Operation, entries: MediaList[]) => {
-        const controller = new AbortController()
-        abortRef.current = controller
-        setIsCancelling(false)
-        setOperation(kind)
+    /** Starts the claimed run (see claim) on its final set of entries */
+    const startRun = (entries: MediaList[]) => {
+        const controller = abortRef.current ?? new AbortController()
         setFailedIds([])
         setFailureReason(null)
 
@@ -267,16 +265,21 @@ export function useBulkOperations(client: AniListClient | null) {
     }
 
     /** Claims the single run slot; false when a run is already going */
+    // Stop works from the moment of claiming, including during the pre-run refresh
     const claim = (kind: Operation) => {
         if (runningRef.current) return false
         runningRef.current = true
+        abortRef.current = new AbortController()
+        setIsCancelling(false)
         setOperation(kind)
         return true
     }
 
     const release = () => {
         runningRef.current = false
+        abortRef.current = null
         setOperation(null)
+        setIsCancelling(false)
     }
 
     /** Resolves true when a run started; false when it was refused before touching AniList */
@@ -313,14 +316,22 @@ export function useBulkOperations(client: AniListClient | null) {
                 try {
                     await store.fetchMediaLists(user.id, useStore.getState().currentType, true)
                     const fresh = useStore.getState()
+                    // A normal run follows the refreshed selection, which drops
+                    // entries that no longer match the filters; a retry keeps its ids
                     const idSet = new Set(entries.map(e => e.id))
-                    entries = [...fresh.animeLists, ...fresh.mangaLists].filter(e => idSet.has(e.id))
+                    entries = [...fresh.animeLists, ...fresh.mangaLists]
+                        .filter(e => idSet.has(e.id) && (entriesOverride !== undefined || fresh.selectedEntries.has(e.id)))
                 } catch {
                     store.addNotification({ type: 'error', message: 'Could not refresh list data — aborting custom list changes' })
                     release()
                     return false
                 }
             }
+        }
+
+        if (abortRef.current?.signal.aborted || entries.length === 0) {
+            release()
+            return false
         }
 
         // Checked on the (possibly refreshed) entries, per entry: removing a
@@ -337,7 +348,7 @@ export function useBulkOperations(client: AniListClient | null) {
         }
 
         lastOperationRef.current = { type: 'update', options }
-        const { ledger, signal } = startRun('update', entries)
+        const { ledger, signal } = startRun(entries)
 
         try {
             if (!hasCustomListChanges) {
@@ -369,7 +380,7 @@ export function useBulkOperations(client: AniListClient | null) {
         if (entries.length === 0 || !claim('delete')) return
 
         lastOperationRef.current = { type: 'delete' }
-        const { ledger, signal } = startRun('delete', entries)
+        const { ledger, signal } = startRun(entries)
 
         try {
             for (const batch of chunk(entries.map(e => e.id), CHUNK_SIZE)) {

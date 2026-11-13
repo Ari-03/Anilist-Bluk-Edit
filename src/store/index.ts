@@ -854,6 +854,8 @@ export const useStore = create<AppState & AppActions>()(
                         ...state,
                         user: active?.user ?? null,
                         accessToken: active?.accessToken ?? null,
+                        // Older versions persisted this without the lists it described
+                        lastDataLoad: null,
                         activeAccountId: active ? state.activeAccountId ?? null : null,
                     }
                 },

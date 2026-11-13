@@ -81,7 +81,13 @@ export default function Home() {
   }
 
   if (!accessToken || !user) {
-    return <TokenLogin />
+    // Notifications stay visible here, e.g. why a revoked account was signed out
+    return (
+      <>
+        <TokenLogin />
+        <NotificationList />
+      </>
+    )
   }
 
   const hasData = getCurrentLists().length > 0
