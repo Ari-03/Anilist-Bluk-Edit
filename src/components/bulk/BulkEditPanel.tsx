@@ -13,7 +13,7 @@ import PartialFailureBar from '@/components/bulk/PartialFailureBar'
 import RelationFinderModal from '@/components/RelationFinderModal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { MediaList } from '@/types/anilist'
-import { Save, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckSquare } from 'lucide-react'
 
 /** Bulk edits touching at least this many entries ask for confirmation first */
 const CONFIRM_THRESHOLD = 25
@@ -22,16 +22,26 @@ interface BulkEditPanelProps {
     client: AniListClient | null
 }
 
+// Both floating surfaces sit along the bottom of the list column, clear of the
+// desktop sidebar (w-64, shown from lg up): the Bulk edit button in the
+// bottom-right corner, the bulk bar centred
+const DOCK = 'fixed bottom-0 left-0 right-0 lg:left-64 z-toolbar p-3 sm:p-4 pointer-events-none flex'
+const DOCK_SPRING = { type: 'spring', stiffness: 380, damping: 32 } as const
+
 /**
- * Bulk edit surface (entered from ListToolbar): a floating action bar pinned
- * to the bottom of the viewport while bulk mode is active, so the cards
- * stay visible and animate to their new spots as batches confirm.
+ * Bulk edit surface, pinned to the bottom of the viewport so it is reachable
+ * from anywhere in the list. Outside bulk mode it is a floating "Bulk edit"
+ * button. In bulk mode it is a card with two states, each with one primary
+ * action: selecting (the action bar, ending in Edit) and editing (the form,
+ * ending in Apply). The cards stay visible behind it and animate to their new
+ * spots as batches confirm.
  */
 export default function BulkEditPanel({ client }: BulkEditPanelProps) {
     const {
         selectedEntries,
         bulkEditMode,
         filteredEntries,
+        libraryCount,
         user,
         currentType,
         setBulkEditMode,
@@ -43,6 +53,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
             selectedEntries: s.selectedEntries,
             bulkEditMode: s.bulkEditMode,
             filteredEntries: s.filteredEntries,
+            libraryCount: s.getCurrentLists().length,
             user: s.user,
             currentType: s.currentType,
             setBulkEditMode: s.setBulkEditMode,
@@ -65,6 +76,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
     const inputValid = parseEditInput(options.score, options.progress, user?.mediaListOptions?.scoreFormat).ok
     const changes = summarizeBulkChanges(options, currentType)
     const entriesLabel = `${selectedCount} ${selectedCount === 1 ? 'entry' : 'entries'}`
+    const typeLabel = currentType === MediaType.ANIME ? 'anime' : 'manga'
 
     const availableCustomLists = (() => {
         if (!user?.mediaListOptions) return []
@@ -97,15 +109,36 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
 
     return (
         <>
+            {/* Floating entry point; hidden while there is nothing to edit */}
+            <AnimatePresence>
+                {!bulkEditMode && totalCount > 0 && (
+                    <m.div
+                        className={`${DOCK} justify-end sm:p-6`}
+                        initial={{ y: 24, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 24, opacity: 0, transition: { duration: 0.12 } }}
+                        transition={DOCK_SPRING}
+                    >
+                        <button
+                            onClick={() => setBulkEditMode(true)}
+                            className="btn-tint pointer-events-auto h-12 px-6 rounded-full text-base shadow-overlay ring-1 ring-white/15"
+                        >
+                            <CheckSquare className="w-5 h-5" />
+                            Bulk edit
+                        </button>
+                    </m.div>
+                )}
+            </AnimatePresence>
+
             {/* Floating action bar */}
             <AnimatePresence>
                 {bulkEditMode && (
                     <m.div
-                        className="fixed bottom-0 inset-x-0 z-toolbar p-4 pointer-events-none flex justify-center"
+                        className={`${DOCK} justify-center`}
                         initial={{ y: 96, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 96, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                        transition={DOCK_SPRING}
                     >
                         <div className="pointer-events-auto w-full max-w-3xl card shadow-overlay p-3 space-y-3">
                             {/* Expanded edit form */}
@@ -118,7 +151,14 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                         transition={{ duration: 0.2, ease: 'easeOut' }}
                                         className="overflow-hidden"
                                     >
-                                        <div className="max-h-[55vh] overflow-y-auto pr-1 pb-1">
+                                        <div className="mb-3">
+                                            <h3 className="text-base font-semibold text-fg">
+                                                Edit {selectedCount.toLocaleString()} {typeLabel} {selectedCount === 1 ? 'entry' : 'entries'}
+                                            </h3>
+                                            <p className="text-xs text-fg-muted">Only the fields you change are applied.</p>
+                                        </div>
+                                        {/* The bottom fade hints that the form scrolls when it is taller than its box */}
+                                        <div className="max-h-[50dvh] max-sm:max-h-[60dvh] overflow-y-auto pr-1 pb-6 [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]">
                                             <BulkEditForm
                                                 options={options}
                                                 onChange={setOptions}
@@ -128,20 +168,20 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                                 disabled={bulk.isBusy}
                                             />
                                         </div>
-                                        <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-edge mt-3">
-                                            <p className="mr-auto min-w-0 text-xs text-fg-muted" aria-live="polite">
+                                        <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-edge">
+                                            <p className="mr-auto min-w-0 basis-full sm:basis-0 sm:flex-1 text-xs text-fg-muted" aria-live="polite">
                                                 {changes.length > 0 ? changes.join(' · ') : 'Pick at least one field to change'}
                                             </p>
-                                            <button onClick={() => setFormOpen(false)} className="btn-secondary h-9 text-sm">
-                                                <X className="w-4 h-4" />
-                                                Close
+                                            <button onClick={() => setFormOpen(false)} className="btn-ghost px-2.5">
+                                                <ArrowLeft className="w-4 h-4" />
+                                                Back
                                             </button>
                                             <button
                                                 onClick={handleApply}
                                                 disabled={selectedCount === 0 || !inputValid || changes.length === 0}
-                                                className="btn-primary h-9 text-sm"
+                                                className="btn-tint"
                                             >
-                                                <Save className="w-4 h-4" />
+                                                <Check className="w-4 h-4" />
                                                 Apply to {entriesLabel}
                                             </button>
                                         </div>
@@ -164,15 +204,15 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                     onRetry={bulk.retryFailed}
                                     onDismiss={bulk.dismissFailed}
                                 />
-                            ) : (
+                            ) : formOpen ? null : (
                                 <BulkActionBar
                                     selectedCount={selectedCount}
                                     totalCount={totalCount}
                                     allSelected={allSelected}
-                                    formOpen={formOpen}
+                                    filtered={totalCount < libraryCount}
                                     onSelectAll={selectAllEntries}
                                     onClearSelection={clearSelection}
-                                    onToggleForm={() => setFormOpen(!formOpen)}
+                                    onEdit={() => setFormOpen(true)}
                                     onDelete={() => setShowDeleteConfirm(true)}
                                     onFindRelations={() => setRelationSeeds(getSelectedEntries())}
                                     onExit={handleExit}

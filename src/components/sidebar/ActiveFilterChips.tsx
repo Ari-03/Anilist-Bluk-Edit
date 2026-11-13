@@ -91,7 +91,7 @@ export default function ActiveFilterChips() {
                         exit={{ opacity: 0, scale: 0.9 }}
                         transition={{ duration: 0.12 }}
                         onClick={chip.onRemove}
-                        className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 rounded-full bg-accent/10 text-accent-strong text-xs font-medium hover:bg-accent/20 transition-colors"
+                        className="inline-flex items-center gap-1 h-7 touch:h-11 pl-2.5 pr-1.5 touch:pl-3.5 touch:pr-2.5 rounded-full bg-accent/10 text-accent-strong text-xs touch:text-sm font-medium hover:bg-accent/20 transition-colors"
                         title="Remove filter"
                     >
                         {chip.label}
@@ -102,7 +102,7 @@ export default function ActiveFilterChips() {
             {chips.length > 1 && (
                 <button
                     onClick={clearFilters}
-                    className="h-7 px-2.5 rounded-full text-xs font-medium text-fg-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                    className="h-7 touch:h-11 px-2.5 rounded-full text-xs touch:text-sm font-medium text-fg-muted hover:text-fg hover:bg-raised transition-colors"
                 >
                     Clear all
                 </button>

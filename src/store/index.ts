@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
+import { AccentColor, DEFAULT_ACCENT, parseAccent } from '@/lib/accent'
 import {
     User,
     MediaList,
@@ -102,6 +103,8 @@ interface AppState {
 
     // Theme
     darkMode: boolean
+    /** Tints the logo and the bulk edit controls; picked in Settings */
+    accentColor: AccentColor
 }
 
 interface AppActions {
@@ -156,6 +159,7 @@ interface AppActions {
     removeNotification: (id: string) => void
     clearNotifications: () => void
     toggleDarkMode: () => void
+    setAccentColor: (accentColor: AccentColor) => void
 
     // Utility actions
     getCurrentLists: () => MediaList[]
@@ -245,6 +249,7 @@ const initialState: AppState = {
     error: null,
     notifications: [],
     darkMode: true, // dark-first; persisted preference wins for returning users
+    accentColor: DEFAULT_ACCENT,
 }
 
 /** Selector for the active media type's entries (use inside useStore so renders track list changes) */
@@ -844,6 +849,7 @@ export const useStore = create<AppState & AppActions>()(
                 },
                 clearNotifications: () => set({ notifications: [] }),
                 toggleDarkMode: () => set(state => ({ darkMode: !state.darkMode })),
+                setAccentColor: (accentColor) => set({ accentColor }),
 
                 // Utility actions
                 getCurrentLists: () => {
@@ -882,6 +888,7 @@ export const useStore = create<AppState & AppActions>()(
                         ...state,
                         user: active?.user ?? null,
                         accessToken: active?.accessToken ?? null,
+                        accentColor: parseAccent(state.accentColor),
                         // Older versions persisted this without the lists it described
                         lastDataLoad: null,
                         activeAccountId: active ? state.activeAccountId ?? null : null,
@@ -892,6 +899,7 @@ export const useStore = create<AppState & AppActions>()(
                     accounts: state.accounts,
                     activeAccountId: state.activeAccountId,
                     darkMode: state.darkMode,
+                    accentColor: state.accentColor,
                     currentType: state.currentType,
                     viewMode: state.viewMode,
                     filters: state.filters,

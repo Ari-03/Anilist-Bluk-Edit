@@ -1,4 +1,4 @@
-import { MediaList } from '@/types/anilist'
+import { MediaList, MediaType } from '@/types/anilist'
 
 export const formatProgress = (entry: MediaList): string => {
     const current = entry.progress || 0
@@ -34,3 +34,11 @@ const FORMAT_LABELS: Record<string, string> = {
 
 export const formatMediaFormat = (format?: string): string =>
     format ? (FORMAT_LABELS[format] ?? format) : ''
+
+/**
+ * Format label worth showing on an entry: empty for the format nearly every
+ * entry of that type has (TV for anime, Manga for manga), so the exceptions
+ * (Movie, Novel, One Shot…) stand out instead of every card saying "Manga".
+ */
+export const notableFormat = (format: string | undefined, type: MediaType): string =>
+    format === (type === MediaType.ANIME ? 'TV' : 'MANGA') ? '' : formatMediaFormat(format)

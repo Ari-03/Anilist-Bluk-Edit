@@ -36,7 +36,7 @@ export default function RangeFilter({
                     <input
                         id={`${fieldId}-f1`}
                         type="number"
-                        className="input h-9 text-sm"
+                        className="input"
                         min={min}
                         max={value[1]}
                         step={step}
@@ -52,7 +52,7 @@ export default function RangeFilter({
                     <input
                         id={`${fieldId}-f2`}
                         type="number"
-                        className="input h-9 text-sm"
+                        className="input"
                         min={value[0]}
                         max={max}
                         step={step}

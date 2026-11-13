@@ -11,7 +11,7 @@ A powerful web application for efficiently managing your AniList anime and manga
 - **Bulk Operations** - Edit multiple entries simultaneously
 - **Advanced Filtering** - Find specific entries with powerful filters
 - **Real-time Updates** - Changes are immediately synced with AniList
-- **Dark Mode** - Beautiful dark/light theme toggle
+- **Dark Mode and accent colour** - Dark/light theme toggle, plus a choice of accent colour in Settings
 
 ### 📊 Bulk Edit Operations
 - Change status (Watching/Reading, Completed, Dropped, etc.)
@@ -79,7 +79,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 3. **Load Lists**: Your anime and manga lists will be automatically loaded
 
 ### Bulk Editing
-1. **Enable Bulk Mode**: Click the "Bulk Edit" button in the toolbar
+1. **Enable Bulk Mode**: Click the floating "Bulk edit" button at the bottom right
 2. **Select Entries**: Use checkboxes to select multiple entries
 3. **Choose Action**: Select what you want to change (status, score, etc.)
 4. **Apply Changes**: Review and confirm your bulk operation
@@ -89,7 +89,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - **Quick Filters**: Use the status tabs (Watching, Completed, etc.)
 - **Advanced Filters**: Open the filter panel for detailed options
 - **Search**: Type in the search box to find specific titles
-- **Sorting**: Click column headers to sort by different criteria
+- **Sorting**: Pick an order from the sort menu next to the search box
 
 ### Managing Lists
 - **Switch Types**: Toggle between Anime and Manga using the tabs

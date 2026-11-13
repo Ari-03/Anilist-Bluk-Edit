@@ -56,7 +56,7 @@ export default function CustomListsField({
                     type="button"
                     onClick={handleRefresh}
                     disabled={refreshing || disabled}
-                    className="btn-icon w-8 h-8"
+                    className="btn-icon"
                     title="Refresh list names from AniList"
                 >
                     <RotateCcw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
@@ -92,8 +92,8 @@ export default function CustomListsField({
                                     onClick={() => cycle(listName)}
                                     aria-label={`${listName}: ${state === 'add' ? 'will be added' : state === 'remove' ? 'will be removed' : 'no change'}`}
                                     className={cn(
-                                        'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-all duration-150 disabled:opacity-50',
-                                        state === null && 'border-edge text-fg-muted hover:border-fg-subtle hover:text-fg',
+                                        'inline-flex items-center gap-1.5 h-8 touch:h-11 px-3 rounded-full border text-xs touch:text-sm font-medium transition-all duration-150 disabled:opacity-50',
+                                        state === null && 'border-edge-strong text-fg-muted hover:border-fg-subtle hover:text-fg',
                                         state === 'add' && 'border-success/40 bg-success/10 text-success',
                                         state === 'remove' && 'border-danger/40 bg-danger/10 text-danger line-through'
                                     )}

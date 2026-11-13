@@ -27,14 +27,13 @@ function SectionHeaderSkeleton() {
 export default function MediaGridSkeleton({ count = 15, viewMode = 'grid' }: MediaGridSkeletonProps) {
     if (viewMode === 'list') {
         return (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
                 <SectionHeaderSkeleton />
                 {Array.from({ length: Math.min(count, 10) }).map((_, i) => (
-                    <div key={i} className="card p-3 flex items-center gap-3">
-                        <Skeleton className="w-11 h-[60px] rounded-md flex-shrink-0" />
-                        <div className="flex-1 space-y-2">
+                    <div key={i} className="card px-3 py-2 flex items-center gap-3">
+                        <Skeleton className="w-8 h-11 rounded flex-shrink-0" />
+                        <div className="flex-1">
                             <Skeleton className="h-4 w-2/5" />
-                            <Skeleton className="h-3 w-1/4" />
                         </div>
                     </div>
                 ))}
@@ -45,7 +44,7 @@ export default function MediaGridSkeleton({ count = 15, viewMode = 'grid' }: Med
     return (
         <div>
             <SectionHeaderSkeleton />
-            <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+            <div className="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-4">
                 {Array.from({ length: count }).map((_, i) => (
                     <MediaCardSkeleton key={i} />
                 ))}

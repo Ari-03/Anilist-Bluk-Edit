@@ -346,7 +346,7 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
                             <select
                                 value={targetStatus}
                                 onChange={(e) => setTargetStatus(e.target.value as MediaListStatus)}
-                                className="select h-8 w-40 text-xs"
+                                className="select h-9 touch:h-11 w-40"
                             >
                                 {Object.values(MediaListStatus).map(status => (
                                     <option key={status} value={status}>
@@ -357,13 +357,13 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
                         </div>
                     </div>
                     <div className="flex justify-end gap-2">
-                        <button onClick={onClose} className="btn-secondary h-9 text-sm">
+                        <button onClick={onClose} className="btn-secondary h-9 touch:h-11">
                             Cancel
                         </button>
                         <button
                             onClick={handleApply}
                             disabled={selectedCount === 0}
-                            className="btn-primary h-9 text-sm"
+                            className="btn-primary h-9 touch:h-11"
                         >
                             Add {selectedCount} as {getStatusLabel(targetStatus, currentType)}
                         </button>

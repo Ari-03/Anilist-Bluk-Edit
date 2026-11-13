@@ -50,10 +50,11 @@ export default function StatusSection({
                         aria-label={`Select all ${getStatusLabel(status, mediaType)}`}
                         onClick={allSelected ? onDeselectSection : onSelectSection}
                         className={cn(
-                            'flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-150',
+                            // The ::before pads the 20px badge out to a 44px touch target
+                            'relative flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-150 before:absolute before:-inset-3',
                             allSelected || someSelected
-                                ? 'bg-purple border-purple text-white'
-                                : 'border-edge-strong text-transparent hover:border-purple'
+                                ? 'bg-tint border-tint text-white'
+                                : 'border-edge-strong text-transparent hover:border-tint'
                         )}
                         title={allSelected ? 'Deselect all in this section' : 'Select all in this section'}
                     >
@@ -67,12 +68,14 @@ export default function StatusSection({
                 <button
                     onClick={onToggleCollapsed}
                     aria-expanded={!collapsed}
-                    className="flex flex-1 items-center gap-2.5 py-2 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="flex flex-1 items-center gap-2.5 py-2 touch:min-h-11 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     title={collapsed ? 'Expand section' : 'Collapse section'}
                 >
                     <span className={cn('w-2 h-2 rounded-full flex-shrink-0', getStatusColor(status))} />
                     <span className="text-sm font-semibold text-fg">{getStatusLabel(status, mediaType)}</span>
-                    <span className="text-xs text-fg-muted tabular-nums">{count}</span>
+                    <span className="text-xs text-fg-muted tabular-nums">
+                        {bulkEditMode && selectedCount > 0 ? `${selectedCount} of ${count} selected` : count}
+                    </span>
                     <span className="flex-1 h-px bg-edge" />
                     <ChevronDown
                         className={cn(

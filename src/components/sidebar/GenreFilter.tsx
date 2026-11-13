@@ -51,7 +51,7 @@ export default function GenreFilter() {
                     placeholder="Search genres…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="input h-9 pl-9 pr-8 text-sm"
+                    className="input pl-9 pr-8"
                 />
                 {search && (
                     <button

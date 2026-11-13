@@ -1,8 +1,8 @@
-import { memo, ReactNode } from 'react'
+import { memo } from 'react'
 import { Image as IKImage } from '@imagekit/next'
 import { MediaList, MediaType } from '@/types/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'
-import { formatProgress, formatScore, hasScore, progressPercent, formatMediaFormat } from '@/lib/entryDisplay'
+import { formatProgress, formatScore, hasScore, progressPercent, notableFormat } from '@/lib/entryDisplay'
 import { cn } from '@/lib/utils'
 import DefaultCover from '@/components/DefaultCover'
 import { Star, Play, Book, ExternalLink, Edit3, Trash2, Check, Loader2, AlertCircle } from 'lucide-react'
@@ -21,8 +21,6 @@ interface MediaCardProps {
     onToggleSelect: (id: number) => void
     onStartEdit: (entry: MediaList) => void
     onDelete: (entry: MediaList) => void
-    /** Rendered below the cover when the entry is being quick-edited */
-    editForm?: ReactNode
 }
 
 function MediaCard({
@@ -36,28 +34,27 @@ function MediaCard({
     onToggleSelect,
     onStartEdit,
     onDelete,
-    editForm,
 }: MediaCardProps) {
     const coverColor = entry.media?.coverImage?.color || undefined
     const pct = progressPercent(entry)
     const title = entry.media?.title?.userPreferred || entry.media?.title?.romaji || 'Unknown'
     const ProgressIcon = currentType === MediaType.ANIME ? Play : Book
 
+    const format = notableFormat(entry.media?.format, currentType)
+
+    // The whole card is one target: it selects in bulk mode and opens the entry otherwise
     const handleCardClick = (e: React.MouseEvent) => {
-        if (!bulkEditMode) return
         const target = e.target as HTMLElement
         if (target.closest('button, a, input, select, textarea')) return
-        onToggleSelect(entry.id)
+        if (bulkEditMode) onToggleSelect(entry.id)
+        else onStartEdit(entry)
     }
 
     return (
         <div
             className={cn(
-                'group relative card overflow-hidden transition-all duration-200 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:shadow-[0_10px_28px_-8px_var(--glow,rgb(0_0_0/0.35))]',
-                bulkEditMode && 'cursor-pointer',
-                selected && 'ring-2 ring-purple ring-offset-2 ring-offset-page shadow-raised',
-                selectionActive && !selected && !syncState && 'opacity-60 saturate-50 hover:opacity-100 hover:saturate-100',
-                syncState === 'error' && 'ring-2 ring-danger',
+                'group relative card overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:shadow-[0_10px_28px_-8px_var(--glow,rgb(0_0_0/0.35))]',
+                selected && 'shadow-raised',
                 syncState === 'pending' && 'opacity-70'
             )}
             style={coverColor ? ({ '--glow': `${coverColor}59` } as React.CSSProperties) : undefined}
@@ -82,12 +79,17 @@ function MediaCard({
                     <DefaultCover className="w-full h-full" size="large" />
                 )}
 
+                {/* Unselected covers recede under a scrim; the title and numbers above it stay readable */}
+                {selectionActive && !selected && !syncState && (
+                    <div className="absolute inset-0 bg-black/55 transition-opacity duration-150 group-hover:opacity-0" />
+                )}
+
                 {/* Bottom scrim + title */}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent pt-10 px-2.5 pb-2.5">
-                    <h3 className="text-[13px] font-semibold leading-snug text-white line-clamp-2 [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]">
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/70 via-60% to-transparent pt-12 px-2.5 pb-2.5">
+                    <h3 className="text-sm font-semibold leading-snug text-white line-clamp-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]">
                         {title}
                     </h3>
-                    <div className="mt-1 flex items-center justify-between text-[11px] text-white/85">
+                    <div className="mt-1 flex items-center justify-between text-xs text-white">
                         <span className="flex items-center gap-1 tabular-nums">
                             <ProgressIcon className="w-3 h-3" />
                             {formatProgress(entry)}
@@ -103,13 +105,13 @@ function MediaCard({
                 {showStatus && entry.status ? (
                     <div className="absolute top-2 right-2 flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-2 py-0.5">
                         <span className={cn('w-1.5 h-1.5 rounded-full', getStatusColor(entry.status))} />
-                        <span className="text-[11px] font-medium text-white">
+                        <span className="text-xs font-medium text-white">
                             {getStatusLabel(entry.status, currentType)}
                         </span>
                     </div>
-                ) : entry.media?.format ? (
-                    <div className="absolute top-2 right-2 rounded-md bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[11px] font-medium text-white/90">
-                        {formatMediaFormat(entry.media.format)}
+                ) : format ? (
+                    <div className="absolute top-2 right-2 rounded-md bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-xs font-medium text-white/90">
+                        {format}
                     </div>
                 ) : null}
 
@@ -121,9 +123,10 @@ function MediaCard({
                             onToggleSelect(entry.id)
                         }}
                         className={cn(
-                            'absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-150',
+                            // The ::before pads the 24px badge out to a 44px touch target
+                            'absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-150 before:absolute before:-inset-2.5',
                             selected
-                                ? 'bg-purple border-purple text-white'
+                                ? 'bg-tint border-tint text-white'
                                 : 'bg-black/50 border-white/80 text-transparent group-hover:text-white/70'
                         )}
                         role="checkbox"
@@ -147,10 +150,17 @@ function MediaCard({
                     </div>
                 )}
 
-                {/* Hover actions */}
-                {!bulkEditMode && !editForm && (
-                    /* Hover-revealed on pointer devices; always shown on touch, and when focused */
-                    <div className="absolute top-9 right-2 flex flex-col gap-1 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0 [@media(hover:none)]:opacity-100 [@media(hover:none)]:translate-x-0 transition-all duration-150 motion-reduce:transition-none motion-reduce:translate-x-0">
+                {/* Hover shortcuts */}
+                {!bulkEditMode && (
+                    /* Revealed on hover or keyboard focus. Touch has no hover: tapping the
+                       card opens the entry, where the same actions are labelled buttons */
+                    <div
+                        className={cn(
+                            'absolute right-2 flex flex-col gap-1 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0 [@media(hover:none)]:pointer-events-none focus-within:pointer-events-auto transition-all duration-150 motion-reduce:transition-none motion-reduce:translate-x-0',
+                            // Sit below the status or format chip when the card has one
+                            (showStatus && entry.status) || format ? 'top-9' : 'top-2'
+                        )}
+                    >
                         <button
                             onClick={() => onStartEdit(entry)}
                             className="w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center hover:bg-accent transition-colors"
@@ -188,8 +198,16 @@ function MediaCard({
                 )}
             </div>
 
-            {/* Quick edit form */}
-            {editForm && <div className="p-3">{editForm}</div>}
+            {/* Selected / failed outline. Drawn inside the card because big lists use
+                content-visibility, whose paint containment clips rings outside the box */}
+            {(selected || syncState === 'error') && (
+                <div
+                    className={cn(
+                        'pointer-events-none absolute inset-0 rounded-xl border-[3px]',
+                        syncState === 'error' ? 'border-danger' : 'border-tint'
+                    )}
+                />
+            )}
         </div>
     )
 }

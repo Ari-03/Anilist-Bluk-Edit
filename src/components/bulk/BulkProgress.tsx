@@ -30,7 +30,7 @@ export default function BulkProgress({ operation, progress, isCancelling, onCanc
                     <button
                         onClick={onCancel}
                         disabled={isCancelling}
-                        className="btn-ghost h-8 px-2.5 text-xs"
+                        className="btn-ghost h-9 touch:h-11 px-2.5"
                     >
                         {isCancelling ? 'Stopping…' : 'Stop'}
                     </button>
@@ -42,7 +42,7 @@ export default function BulkProgress({ operation, progress, isCancelling, onCanc
                 barClassName={isDelete ? 'bg-danger' : undefined}
                 label={isDelete ? 'Deleting entries' : 'Updating entries'}
             />
-            <div className="flex items-center justify-between gap-4 text-[11px] text-fg-subtle tabular-nums">
+            <div className="flex items-center justify-between gap-4 text-xs text-fg-subtle tabular-nums">
                 <span className="flex items-center gap-4">
                     <span className="text-success">{progress.successful} ok</span>
                     {progress.failed > 0 && <span className="text-danger">{progress.failed} failed</span>}
