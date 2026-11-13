@@ -21,7 +21,7 @@ export default function BulkProgress({ operation, progress, isCancelling, onCanc
                     {isDelete ? (
                         <Trash2 className="w-4 h-4 text-danger" />
                     ) : (
-                        <Loader2 className="w-4 h-4 text-accent animate-spin" />
+                        <Loader2 className="w-4 h-4 text-accent-strong animate-spin" />
                     )}
                     {isDelete ? 'Deleting' : 'Updating'} {progress.current}/{progress.total}
                 </span>

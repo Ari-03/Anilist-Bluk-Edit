@@ -39,7 +39,7 @@ export default function FilterSection({
                     {icon}
                     {label}
                     {badge != null && badge !== '' && (
-                        <span className="inline-flex items-center rounded-full bg-accent/15 text-accent px-2 py-0.5 text-[11px] font-semibold tabular-nums">
+                        <span className="inline-flex items-center rounded-full bg-accent/15 text-accent-strong px-2 py-0.5 text-[11px] font-semibold tabular-nums">
                             {badge}
                         </span>
                     )}

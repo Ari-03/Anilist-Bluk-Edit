@@ -1,172 +1,122 @@
-import React, { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import { useAuth, takeAddAccountIntent, AddAccountIntent, SignInResult } from '@/contexts/AuthContext'
-import { Loader2, CheckCircle, XCircle, ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, ArrowLeft, ExternalLink, RefreshCw, UserX } from 'lucide-react'
+import { PendingOAuth, signInWithToken, startOAuth, takePendingOAuth } from '@/lib/auth'
+import StatusPage from '@/components/ui/StatusPage'
 
-const AuthCallback: React.FC = () => {
-  const router = useRouter()
-  const { signInWithToken, signInWithOAuth } = useAuth()
-  const [status, setStatus] = useState<'processing' | 'success' | 'same-account' | 'error'>('processing')
-  const [error, setError] = useState<string>('')
-  // Set when "add another account" came back with the account that was already active
-  const [repeat, setRepeat] = useState<{ name: string; intent: AddAccountIntent } | null>(null)
-  // Reuse the token exchange when Strict Mode subscribes to this effect twice.
-  const signInRequest = useRef<Promise<SignInResult> | null>(null)
+type Outcome =
+    | { status: 'processing' }
+    | { status: 'success' }
+    | { status: 'same-account'; name: string; pending: PendingOAuth }
+    | { status: 'error'; message: string }
 
-  useEffect(() => {
-    let isMounted = true
-    let redirectTimeout: ReturnType<typeof setTimeout> | undefined
+/** Reads AniList's implicit-grant response from the URL fragment and signs in */
+async function completeOAuth(): Promise<Outcome> {
+    const params = new URLSearchParams(window.location.hash.substring(1))
+    // The fragment holds a live token: get it out of the address bar and history first
+    window.history.replaceState(null, '', window.location.pathname)
 
-    const handleCallback = async () => {
-      try {
-        // Extract access token from URL fragment
-        const fragment = window.location.hash.substring(1)
+    const pending = takePendingOAuth(params.get('state'))
+    const error = params.get('error')
+    if (error) return { status: 'error', message: params.get('error_description') || error }
 
-        const params = new URLSearchParams(fragment)
-        const accessToken = params.get('access_token')
-        const error = params.get('error')
-        const errorDescription = params.get('error_description')
-
-        if (error) {
-          if (isMounted) {
-            setStatus('error')
-            setError(errorDescription || error || 'Authorization failed')
-          }
-          return
+    const accessToken = params.get('access_token')
+    if (!accessToken) return { status: 'error', message: 'No access token received from AniList' }
+    if (!pending) {
+        return {
+            status: 'error',
+            message: "This sign-in wasn't started from this tab, so it was ignored. Start again from the login page.",
         }
-
-        if (!accessToken) {
-          if (isMounted) {
-            setStatus('error')
-            setError('No access token received from AniList')
-          }
-          return
-        }
-
-        // Use the new secure sign-in method
-        signInRequest.current ??= signInWithToken(accessToken)
-        const result = await signInRequest.current
-
-        if (!isMounted) return // Component unmounted during async operation
-
-        if (result.success) {
-          // Clear the URL fragment to prevent re-processing
-          window.history.replaceState(null, '', window.location.pathname)
-
-          const intent = takeAddAccountIntent()
-          if (intent && intent.fromUserId === result.user.id) {
-            setStatus('same-account')
-            setRepeat({ name: result.user.name, intent })
-            return
-          }
-
-          setStatus('success')
-          // Redirect to main app after a brief success message
-          redirectTimeout = setTimeout(() => {
-            if (isMounted) {
-              router.push('/')
-            }
-          }, 1500)
-        } else {
-          setStatus('error')
-          setError(result.error || 'Failed to authenticate with AniList')
-        }
-      } catch (err) {
-        console.error('Callback error:', err)
-        if (isMounted) {
-          setStatus('error')
-          setError('An unexpected error occurred during authentication')
-        }
-      }
     }
 
-    handleCallback()
-
-    // Cleanup function for React Strict Mode
-    return () => {
-      isMounted = false
-      clearTimeout(redirectTimeout)
+    const result = await signInWithToken(accessToken)
+    if (!result.success) return { status: 'error', message: result.error }
+    if (pending.addAccountFrom === result.user.id) {
+        return { status: 'same-account', name: result.user.name, pending }
     }
-  }, [router, signInWithToken])
-
-  const handleRetry = () => {
-    router.push('/')
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 text-center">
-        {status === 'processing' && (
-          <>
-            <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Authenticating...</h1>
-            <p className="text-gray-600 dark:text-gray-400">Processing your AniList authentication</p>
-          </>
-        )}
-
-        {status === 'success' && (
-          <>
-            <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Authentication Successful!</h1>
-            <p className="text-gray-600 dark:text-gray-400">Redirecting to the application...</p>
-          </>
-        )}
-
-        {status === 'same-account' && repeat && (
-          <>
-            <XCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Still signed in as {repeat.name}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              AniList hands back whichever account is signed in on anilist.co, and that is still {repeat.name}. Sign out
-              there (avatar menu → Logout), log into the other account, then try again.
-            </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              <a
-                href="https://anilist.co"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Open anilist.co
-              </a>
-              <button
-                onClick={() => signInWithOAuth(repeat.intent.clientId, { addAccount: true })}
-                className="inline-flex items-center gap-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2 px-4 rounded-md transition-colors"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Try again
-              </button>
-              <button
-                onClick={handleRetry}
-                className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:underline font-medium py-2 px-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to app
-              </button>
-            </div>
-          </>
-        )}
-
-        {status === 'error' && (
-          <>
-            <XCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Authentication Failed</h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
-            <button
-              onClick={handleRetry}
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Login
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  )
+    return { status: 'success' }
 }
 
-export default AuthCallback
+export default function AuthCallback() {
+    const router = useRouter()
+    const [outcome, setOutcome] = useState<Outcome>({ status: 'processing' })
+    // Strict Mode runs effects twice; the fragment and pending state can only be consumed once
+    const request = useRef<Promise<Outcome> | null>(null)
+
+    useEffect(() => {
+        let active = true
+        let redirect: ReturnType<typeof setTimeout> | undefined
+
+        request.current ??= completeOAuth().catch((error: unknown) => {
+            console.error('Callback error:', error)
+            return { status: 'error', message: 'An unexpected error occurred during authentication' } as const
+        })
+        request.current.then(result => {
+            if (!active) return
+            setOutcome(result)
+            if (result.status === 'success') redirect = setTimeout(() => router.push('/'), 1200)
+        })
+
+        return () => {
+            active = false
+            clearTimeout(redirect)
+        }
+    }, [router])
+
+    const backHome = (
+        <button onClick={() => router.push('/')} className="btn-secondary">
+            <ArrowLeft className="w-4 h-4" />
+            Back to app
+        </button>
+    )
+
+    switch (outcome.status) {
+        case 'processing':
+            return (
+                <StatusPage title="Signing in…" icon={Loader2} spin>
+                    <p>Checking your AniList authorization</p>
+                </StatusPage>
+            )
+        case 'success':
+            return (
+                <StatusPage title="Signed in" icon={CheckCircle} tone="success">
+                    <p>Taking you to your lists…</p>
+                </StatusPage>
+            )
+        case 'same-account':
+            return (
+                <StatusPage
+                    title={`Still signed in as ${outcome.name}`}
+                    icon={UserX}
+                    tone="warning"
+                    actions={
+                        <>
+                            <a href="https://anilist.co" target="_blank" rel="noopener noreferrer" className="btn-primary">
+                                <ExternalLink className="w-4 h-4" />
+                                Open anilist.co
+                            </a>
+                            <button
+                                onClick={() => startOAuth(outcome.pending.clientId, { addAccount: true })}
+                                className="btn-secondary"
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                                Try again
+                            </button>
+                            {backHome}
+                        </>
+                    }
+                >
+                    <p>
+                        AniList hands back whichever account is signed in on anilist.co, and that is still {outcome.name}.
+                        Sign out there (avatar menu → Logout), log into the other account, then try again.
+                    </p>
+                </StatusPage>
+            )
+        case 'error':
+            return (
+                <StatusPage title="Sign-in failed" icon={XCircle} tone="danger" actions={backHome}>
+                    <p>{outcome.message}</p>
+                </StatusPage>
+            )
+    }
+}

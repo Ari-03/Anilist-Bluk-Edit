@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { startOAuth } from '@/lib/auth'
 import { LogIn, AlertCircle, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils'
  * "add another account" dialog (`addAccount` lets the callback detect a repeat login).
  */
 export default function TokenLoginForm({ addAccount = false }: { addAccount?: boolean }) {
-    const { signInWithOAuth, isLoading } = useAuth()
     const [error, setError] = useState('')
     const [oauthClientId, setOauthClientId] = useState('')
     const [showSetup, setShowSetup] = useState(false)
@@ -22,14 +21,14 @@ export default function TokenLoginForm({ addAccount = false }: { addAccount?: bo
             return
         }
         setError('')
-        signInWithOAuth(oauthClientId.trim() || undefined, { addAccount })
+        startOAuth(oauthClientId.trim() || undefined, { addAccount })
     }
 
     return (
         <div className="space-y-4">
-            <button onClick={handleOAuthLogin} disabled={isLoading} className="btn-primary w-full h-12 text-base">
+            <button onClick={handleOAuthLogin} className="btn-primary w-full h-12 text-base">
                 <LogIn className="h-5 w-5" />
-                {isLoading ? 'Connecting…' : addAccount ? 'Connect this account' : 'Log in with AniList'}
+                {addAccount ? 'Connect this account' : 'Log in with AniList'}
             </button>
 
             {!hasConfiguredClientId && (
@@ -49,7 +48,7 @@ export default function TokenLoginForm({ addAccount = false }: { addAccount?: bo
                                 onChange={(e) => setOauthClientId(e.target.value)}
                                 placeholder="AniList Client ID"
                                 className="input"
-                                disabled={isLoading}
+                                aria-label="AniList Client ID"
                             />
                             <p className="text-xs text-fg-subtle">
                                 Create one under{' '}
@@ -57,7 +56,7 @@ export default function TokenLoginForm({ addAccount = false }: { addAccount?: bo
                                     href="https://anilist.co/settings/developer"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-accent hover:underline"
+                                    className="text-accent-strong hover:underline"
                                 >
                                     AniList Developer settings
                                 </a>{' '}

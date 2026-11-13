@@ -7,7 +7,7 @@ import {
   ScoreFormat,
 } from '@/types/anilist'
 import { VIEWER_QUERY } from '@/lib/viewerQuery'
-import { pacer, sleepUntil } from '@/lib/pacer'
+import { isAbortError, pacer, sleepUntil } from '@/lib/pacer'
 import { AliasResult, AniListRequestError, GraphQLBody, splitAliases } from '@/lib/graphql'
 
 export interface RelationMediaNode {
@@ -37,7 +37,7 @@ export interface RelationLookupResult {
 export interface RequestOptions {
   /** Aborts the pacer wait and any retry sleep. A request already in flight is left to land. */
   signal?: AbortSignal
-  /** Retry once on 5xx / network failure. Only for queries and idempotent mutations. */
+  /** Retry once on 5xx / timeout. Only for queries and idempotent mutations. */
   retryTransient?: boolean
 }
 
@@ -70,9 +70,15 @@ function aliasedDocument(kind: 'query' | 'mutation', defs: string, fields: strin
   return { query, aliasLines: fields.map((_, i) => i + 2) }
 }
 
+const ANILIST_URL = 'https://graphql.anilist.co'
+
 const MAX_RATE_LIMIT_RETRIES = 2
 const MAX_TRANSIENT_RETRIES = 1
 const TRANSIENT_RETRY_DELAY_MS = 1000
+/** A request still unanswered after this is treated like a 5xx (retried only when idempotent) */
+const REQUEST_TIMEOUT_MS = 30_000
+/** AniList's 429 carries Retry-After: 60, but the browser can't read it (see exchange) */
+const OPAQUE_FAILURE_PENALTY_MS = 61_000
 
 // Every mutation returns this so settled updates cover each field the forms can edit
 const RELATION_FIELDS = `
@@ -125,31 +131,47 @@ export class AniListClient {
   }
 
   /**
-   * One paced, retrying round-trip. Every AniList call in the app goes through
-   * here, so the shared pacer sees every request and every rate-limit header.
-   * Returns the raw body (partial data included); throws only when there is no
-   * data at all.
+   * One paced, retrying round-trip straight to AniList. Every AniList call in
+   * the app goes through here, so the shared pacer sees every request and
+   * every rate-limit header. Returns the raw body (partial data included);
+   * throws only when there is no data at all.
    */
   private async exchange<T>(query: string, variables?: Variables, opts: RequestOptions = {}): Promise<GraphQLBody<T>> {
     let rateLimitRetries = 0
     let transientRetries = 0
 
     for (;;) {
-      await sleepUntil(pacer.reserve(), opts.signal)
+      await pacer.acquire(opts.signal)
 
       let response: Response
       try {
-        response = await fetch('/api/anilist/graphql', {
+        response = await fetch(ANILIST_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, variables, token: this.accessToken }),
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
+          },
+          body: JSON.stringify({ query, variables }),
+          // Deliberately not opts.signal: Stop lets an in-flight request land
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         })
       } catch (error) {
-        if (opts.retryTransient && transientRetries++ < MAX_TRANSIENT_RETRIES) {
-          await sleepUntil(Date.now() + TRANSIENT_RETRY_DELAY_MS, opts.signal)
+        const timedOut = error instanceof DOMException && error.name === 'TimeoutError'
+        if (timedOut) {
+          if (opts.retryTransient && transientRetries++ < MAX_TRANSIENT_RETRIES) continue
+          throw new AniListRequestError(408, [{ message: 'AniList did not respond in time', status: 408 }])
+        }
+        // AniList's 429 has no CORS headers, so the browser reports it as a
+        // network error. Offline is the only failure we can tell apart from it;
+        // anything else is treated as a rate limit. A 429 means the request was
+        // never run, and every mutation here is safe to re-send anyway.
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) throw error
+        if (rateLimitRetries++ < MAX_RATE_LIMIT_RETRIES) {
+          pacer.penalize(Date.now() + OPAQUE_FAILURE_PENALTY_MS)
           continue
         }
-        throw error
+        throw new AniListRequestError(429, [{ message: 'AniList is rate limiting requests. Try again in a minute.', status: 429 }])
       }
 
       pacer.observe(response.status, response.headers)
@@ -162,7 +184,8 @@ export class AniListClient {
         continue
       }
 
-      const body = (await response.json()) as GraphQLBody<T>
+      // Cloudflare answers some failures with an HTML page; keep the status
+      const body = (await response.json().catch(() => ({ data: null }))) as GraphQLBody<T>
       if (!body.data) {
         throw new AniListRequestError(
           response.status,
@@ -184,7 +207,8 @@ export class AniListClient {
    * Runs an aliased batch and, when AniList aborted it because of one alias,
    * re-sends the aliases that were never attempted without the culprit. Each
    * round drops at least one item, so k bad entries cost k extra requests
-   * instead of failing the whole batch.
+   * instead of failing the whole batch. Stop during a re-send round returns
+   * what already settled (the rest stay "not attempted") instead of losing it.
    */
   private async settleAliased<I, T>(
     items: I[],
@@ -196,7 +220,13 @@ export class AniListClient {
     const untried = results.flatMap((r, i) => (!r.ok && !r.blamed ? [i] : []))
     if (!blamed || untried.length === 0) return results
 
-    const retried = await this.settleAliased(untried.map(i => items[i]), send)
+    let retried: AliasResult<T>[]
+    try {
+      retried = await this.settleAliased(untried.map(i => items[i]), send)
+    } catch (error) {
+      if (isAbortError(error)) return results
+      throw error
+    }
     untried.forEach((i, k) => {
       results[i] = { ...retried[k], alias: results[i].alias }
     })
@@ -210,8 +240,7 @@ export class AniListClient {
 
   /**
    * Whole collection in one request. Only fields the UI renders are selected:
-   * descriptions and tags alone pushed a 400-entry list past 4 MB, which is
-   * Next's API route warning threshold and close to serverless body limits.
+   * descriptions and tags alone pushed a 400-entry list past 4 MB.
    */
   async getAllMediaLists(userId: number, type: MediaType, opts?: RequestOptions): Promise<MediaList[]> {
     const query = `

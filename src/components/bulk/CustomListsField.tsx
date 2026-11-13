@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '@/store'
+import { refreshProfile } from '@/lib/auth'
 import { MediaType } from '@/types/anilist'
 import { cn } from '@/lib/utils'
 import { Plus, Minus, RotateCcw, ListPlus } from 'lucide-react'
@@ -24,7 +24,6 @@ export default function CustomListsField({
     currentType,
     disabled,
 }: CustomListsFieldProps) {
-    const refreshUser = useStore(s => s.refreshUser)
     const [refreshing, setRefreshing] = useState(false)
 
     const typeLabel = currentType === MediaType.ANIME ? 'Anime' : 'Manga'
@@ -32,7 +31,7 @@ export default function CustomListsField({
     const handleRefresh = async () => {
         setRefreshing(true)
         try {
-            await refreshUser()
+            await refreshProfile()
         } finally {
             setRefreshing(false)
         }
@@ -73,7 +72,7 @@ export default function CustomListsField({
                             href="https://anilist.co/settings/lists"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-accent hover:underline"
+                            className="text-accent-strong hover:underline"
                         >
                             AniList settings
                         </a>

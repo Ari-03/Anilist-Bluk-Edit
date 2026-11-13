@@ -130,7 +130,7 @@ export default function SidebarContent() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-fg uppercase tracking-wide flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-accent" />
+                    <Filter className="h-4 w-4 text-accent-strong" />
                     Filters
                 </h2>
                 {hasActiveFilters && (

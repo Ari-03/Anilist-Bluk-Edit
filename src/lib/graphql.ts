@@ -67,7 +67,7 @@ export function splitAliases<T>(
     })
 }
 
-/** Thrown when a request has no usable data. `status` is the HTTP status the proxy relayed. */
+/** Thrown when a request has no usable data. `status` is AniList's HTTP status (408 for our own timeout). */
 export class AniListRequestError extends Error {
     constructor(readonly status: number, readonly errors: GraphQLError[]) {
         super(errors.map(describeError).join(', ') || `AniList request failed (${status})`)
@@ -77,3 +77,8 @@ export class AniListRequestError extends Error {
 
 export const errorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : String(error)
+
+/** AniList rejected the token itself (revoked/expired), as opposed to a transient failure */
+export const isInvalidTokenError = (error: unknown): boolean =>
+    error instanceof AniListRequestError &&
+    (error.status === 401 || error.errors.some(e => e.status === 401 || /invalid token/i.test(e.message)))

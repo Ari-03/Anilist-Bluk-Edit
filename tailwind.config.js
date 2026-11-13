@@ -15,7 +15,10 @@ module.exports = {
                 page: 'rgb(var(--c-page) / <alpha-value>)',
                 surface: 'rgb(var(--c-surface) / <alpha-value>)',
                 raised: 'rgb(var(--c-raised) / <alpha-value>)',
-                edge: 'rgb(var(--c-edge) / <alpha-value>)',
+                edge: {
+                    DEFAULT: 'rgb(var(--c-edge) / <alpha-value>)',
+                    strong: 'rgb(var(--c-edge-strong) / <alpha-value>)',
+                },
                 fg: {
                     DEFAULT: 'rgb(var(--c-fg) / <alpha-value>)',
                     muted: 'rgb(var(--c-fg-muted) / <alpha-value>)',
@@ -24,7 +27,9 @@ module.exports = {
                 accent: {
                     DEFAULT: 'rgb(var(--c-accent) / <alpha-value>)',
                     hover: 'rgb(var(--c-accent-hover) / <alpha-value>)',
+                    strong: 'rgb(var(--c-accent-strong) / <alpha-value>)',
                 },
+                'on-accent': 'rgb(var(--c-on-accent) / <alpha-value>)',
                 purple: {
                     DEFAULT: 'rgb(var(--c-purple) / <alpha-value>)',
                     hover: 'rgb(var(--c-purple-hover) / <alpha-value>)',

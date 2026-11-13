@@ -2,29 +2,27 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { AnimatePresence, m } from 'framer-motion'
-import { useAuth } from '@/contexts/AuthContext'
+import { activateAccount, refreshProfile, signOutAccount, signOutAll } from '@/lib/auth'
 import { useStore } from '@/store'
 import TokenLoginForm from '@/components/TokenLoginForm'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
-import { Check, ChevronDown, LogOut, UserPlus, Loader2, X, ExternalLink } from 'lucide-react'
+import { Check, ChevronDown, LogOut, UserPlus, X, ExternalLink } from 'lucide-react'
 
 export default function AccountSwitcher() {
-    const { switchAccount, signOut } = useAuth()
-    const { user, accounts, activeAccountId, isLoadingLists, entrySync, removeAccount, logout, addNotification } =
-        useStore()
+    const user = useStore(s => s.user)
+    const accounts = useStore(s => s.accounts)
+    const activeAccountId = useStore(s => s.activeAccountId)
+    // Block switching while anything is writing to or loading from AniList
+    const busy = useStore(s => s.isLoadingLists || Object.values(s.entrySync).some(state => state === 'pending'))
 
     const [open, setOpen] = useState(false)
-    const [switchingTo, setSwitchingTo] = useState<number | null>(null)
     const [showAddAccount, setShowAddAccount] = useState(false)
     const [confirmSignOutAll, setConfirmSignOutAll] = useState(false)
     const [mounted, setMounted] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => setMounted(true), [])
-
-    // Block switching while anything is writing to or loading from AniList
-    const busy = isLoadingLists || Object.values(entrySync).some((s) => s === 'pending')
 
     useEffect(() => {
         if (!open) return
@@ -46,48 +44,25 @@ export default function AccountSwitcher() {
 
     const accountList = Object.values(accounts).sort((a, b) => a.addedAt - b.addedAt)
 
-    const handleSwitch = async (accountId: number) => {
-        const account = accounts[accountId]
-        if (!account || accountId === activeAccountId || busy || switchingTo !== null) return
-
-        setSwitchingTo(accountId)
-        const result = await switchAccount(account.accessToken)
-        setSwitchingTo(null)
-
-        if (result.success) {
-            setOpen(false)
-        } else {
-            // Token no longer valid — drop the saved account
-            removeAccount(accountId)
-            addNotification({
-                type: 'error',
-                message: `Couldn't switch to ${account.user.name}: ${result.error || 'token expired'}. The account was removed — add it again to re-link.`
-            })
-        }
+    // Switching is instant from the saved profile; the token is re-validated in
+    // the background and only a definitive rejection removes the account
+    const handleSwitch = (accountId: number) => {
+        if (accountId === activeAccountId || busy) return
+        activateAccount(accountId)
+        void refreshProfile({ quiet: true })
+        setOpen(false)
     }
 
-    const handleSignOutActive = async () => {
+    const handleSignOutActive = () => {
         if (activeAccountId == null) return
-        removeAccount(activeAccountId)
-        const remaining = Object.values(useStore.getState().accounts).sort((a, b) => a.addedAt - b.addedAt)
         setOpen(false)
-        if (remaining.length > 0) {
-            const result = await switchAccount(remaining[0].accessToken)
-            if (!result.success) {
-                logout()
-                signOut()
-            }
-        } else {
-            logout()
-            signOut()
-        }
+        signOutAccount(activeAccountId)
     }
 
     const handleSignOutAll = () => {
         setConfirmSignOutAll(false)
         setOpen(false)
-        logout()
-        signOut()
+        signOutAll()
     }
 
     return (
@@ -124,16 +99,15 @@ export default function AccountSwitcher() {
 
                         {accountList.map((account) => {
                             const isActive = account.user.id === activeAccountId
-                            const isSwitching = switchingTo === account.user.id
                             return (
                                 <button
                                     key={account.user.id}
                                     onClick={() => handleSwitch(account.user.id)}
-                                    disabled={busy || switchingTo !== null}
+                                    disabled={busy}
                                     className={cn(
                                         'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors',
                                         isActive ? 'bg-accent/10' : 'hover:bg-raised',
-                                        (busy || switchingTo !== null) && !isActive && 'opacity-60'
+                                        busy && !isActive && 'opacity-60'
                                     )}
                                 >
                                     <Image
@@ -147,11 +121,7 @@ export default function AccountSwitcher() {
                                     <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
                                         {account.user.name}
                                     </span>
-                                    {isSwitching ? (
-                                        <Loader2 className="w-4 h-4 text-accent animate-spin" />
-                                    ) : isActive ? (
-                                        <Check className="w-4 h-4 text-accent" strokeWidth={3} />
-                                    ) : null}
+                                    {isActive && <Check className="w-4 h-4 text-accent-strong" strokeWidth={3} />}
                                 </button>
                             )
                         })}

@@ -24,6 +24,8 @@ export class Pacer {
     private anchor = 0
     private lastNow = 0
     private penaltyUntil = 0
+    /** Bumped by every penalty, so a caller that slept through one knows to re-reserve */
+    private penaltyEpoch = 0
     private advertisedLimit: number | null = null
     private remaining: number | null = null
     private listeners = new Set<() => void>()
@@ -63,10 +65,24 @@ export class Pacer {
         return slot
     }
 
+    /**
+     * Wait for a send slot. A slot reserved before a 429 landed was handed out
+     * under the old budget, so a penalty during the wait means reserving again
+     * (behind the penalty, spaced like any other request) instead of sending.
+     */
+    async acquire(signal?: AbortSignal): Promise<void> {
+        for (;;) {
+            const epoch = this.penaltyEpoch
+            await sleepUntil(this.reserve(), signal)
+            if (this.penaltyEpoch === epoch) return
+        }
+    }
+
     /** Push every future slot past `until` (429 Retry-After, or the window is nearly exhausted). */
     penalize(until: number) {
         if (until <= Math.max(this.penaltyUntil, this.lastNow)) return
         this.penaltyUntil = until
+        this.penaltyEpoch++
         this.anchor = Math.max(this.anchor, until)
         this.tokens = 0
         this.emit()

@@ -21,23 +21,35 @@
     /* #26343F */
     --c-fg-muted: 100 115 128;
     /* #647380 */
-    --c-fg-subtle: 148 163 178;
-    /* #94A3B2 */
+    --c-fg-subtle: 100 116 139;
+    /* #64748B: 4.8:1 on white */
+    /* Borders of form controls: 3:1 on surface (--c-edge is for dividers) */
+    --c-edge-strong: 135 150 166;
+    /* #8796A6 */
 
     --c-accent: 61 180 242;
     /* #3DB4F2 */
     --c-accent-hover: 46 134 193;
     /* #2E86C1 */
+    /* Accent for text and solid fills: the brand blue is too light on white */
+    --c-accent-strong: 26 111 168;
+    /* #1A6FA8: 5.4:1 on white */
+    --c-on-accent: 255 255 255;
 
     /* Bulk edit / selection accent */
-    --c-purple: 168 85 247;
-    /* #A855F7 */
-    --c-purple-hover: 147 51 234;
-    /* #9333EA */
+    --c-purple: 147 51 234;
+    /* #9333EA: white text 5.4:1 */
+    --c-purple-hover: 126 34 206;
+    /* #7E22CE */
 
-    --c-success: 34 197 94;
-    --c-danger: 236 74 94;
-    --c-warning: 245 158 11;
+    /* Semantic colors are used both as text and as fills under white text,
+       so the light theme uses shades that pass 4.5:1 both ways */
+    --c-success: 21 128 61;
+    /* #15803D */
+    --c-danger: 212 42 69;
+    /* #D42A45 */
+    --c-warning: 180 83 9;
+    /* #B45309 */
 
     /* Entry status colors */
     --c-status-current: 34 197 94;
@@ -67,8 +79,18 @@
     /* #EDF1F6 */
     --c-fg-muted: 159 173 189;
     /* #9FADBD */
-    --c-fg-subtle: 107 123 143;
+    --c-fg-subtle: 128 144 164;
+    /* #8090A4: 5:1 on surface */
+    --c-edge-strong: 107 123 143;
     /* #6B7B8F */
+
+    --c-accent-strong: 61 180 242;
+    --c-on-accent: 11 22 34;
+    /* #0B1622 on #3DB4F2: 7.8:1 */
+
+    --c-success: 34 197 94;
+    --c-danger: 236 74 94;
+    --c-warning: 245 158 11;
 
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.25);
     --shadow-raised: 0 4px 12px rgb(0 0 0 / 0.35), 0 2px 4px rgb(0 0 0 / 0.25);
@@ -109,7 +131,7 @@
 
     /* Buttons */
     .btn-primary {
-        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-accent text-white text-sm font-semibold transition-colors duration-150 hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-accent-strong text-on-accent text-sm font-semibold transition-colors duration-150 hover:bg-accent-strong/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page disabled:opacity-50 disabled:pointer-events-none;
     }
 
     /* Bulk edit call-to-action */
@@ -136,17 +158,17 @@
 
     /* Form controls */
     .input {
-        @apply w-full h-10 px-3 rounded-lg border border-edge bg-surface text-fg text-sm placeholder:text-fg-subtle transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:opacity-50;
+        @apply w-full h-10 px-3 rounded-lg border border-edge-strong bg-surface text-fg text-sm placeholder:text-fg-subtle transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:opacity-50;
     }
 
     .select {
-        @apply w-full h-10 pl-3 pr-8 rounded-lg border border-edge bg-surface text-fg text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent appearance-none bg-no-repeat disabled:opacity-50;
+        @apply w-full h-10 pl-3 pr-8 rounded-lg border border-edge-strong bg-surface text-fg text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent appearance-none bg-no-repeat disabled:opacity-50;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23647380' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
         background-position: right 0.6rem center;
     }
 
     .checkbox {
-        @apply w-[18px] h-[18px] rounded border-2 border-edge bg-surface text-accent transition-colors duration-150 checked:bg-accent checked:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface cursor-pointer;
+        @apply w-[18px] h-[18px] rounded border-2 border-edge-strong bg-surface text-accent transition-colors duration-150 checked:bg-accent checked:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface cursor-pointer;
     }
 
     /* Legacy loading spinner (replaced progressively by skeletons) */

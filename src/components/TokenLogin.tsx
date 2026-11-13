@@ -25,11 +25,11 @@ const TokenLogin: React.FC = () => {
 
                     <div className="mt-8 pt-6 border-t border-edge grid grid-cols-2 gap-3 text-left">
                         <div className="flex items-start gap-2">
-                            <ListChecks className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                            <ListChecks className="w-4 h-4 text-accent-strong flex-shrink-0 mt-0.5" />
                             <p className="text-xs text-fg-muted">Bulk edit status, score, progress & custom lists</p>
                         </div>
                         <div className="flex items-start gap-2">
-                            <Zap className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                            <Zap className="w-4 h-4 text-accent-strong flex-shrink-0 mt-0.5" />
                             <p className="text-xs text-fg-muted">Rate-limit aware — safe on large libraries</p>
                         </div>
                     </div>

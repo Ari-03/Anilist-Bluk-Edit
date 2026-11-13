@@ -11,7 +11,7 @@ const STYLES: Record<string, { icon: typeof Info; accent: string; iconColor: str
     success: { icon: CheckCircle, accent: 'border-l-success', iconColor: 'text-success' },
     error: { icon: XCircle, accent: 'border-l-danger', iconColor: 'text-danger' },
     warning: { icon: AlertTriangle, accent: 'border-l-warning', iconColor: 'text-warning' },
-    info: { icon: Info, accent: 'border-l-accent', iconColor: 'text-accent' },
+    info: { icon: Info, accent: 'border-l-accent', iconColor: 'text-accent-strong' },
 }
 
 interface ToastProps {

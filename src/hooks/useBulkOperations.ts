@@ -1,11 +1,11 @@
 import { useRef, useState, useCallback } from 'react'
 import { useStore } from '@/store'
-import { AniListClient, EntryUpdates } from '@/lib/anilist'
+import { AniListClient, EntryUpdates, getStatusLabel } from '@/lib/anilist'
 import { errorMessage } from '@/lib/graphql'
 import { isAbortError } from '@/lib/pacer'
 import { parseEditInput } from '@/lib/scoreFormat'
 import { applyCustomListChanges, CustomListAction } from '@/lib/customLists'
-import { MediaList, MediaListStatus } from '@/types/anilist'
+import { MediaList, MediaListStatus, MediaType } from '@/types/anilist'
 
 export interface BulkFormOptions {
     status: MediaListStatus | ''
@@ -27,6 +27,24 @@ export const EMPTY_BULK_OPTIONS: BulkFormOptions = {
     customLists: {}
 }
 
+/** Human-readable list of what a bulk edit will change; empty when the form changes nothing */
+export function summarizeBulkChanges(options: BulkFormOptions, mediaType: MediaType): string[] {
+    const changes: string[] = []
+    if (options.status) changes.push(`Status → ${getStatusLabel(options.status, mediaType)}`)
+    if (options.score.trim()) changes.push(`Score → ${options.score.trim()}`)
+    if (options.progress.trim()) changes.push(`Progress → ${options.progress.trim()}`)
+    if (options.private !== '') changes.push(options.private === 'true' ? 'Make private' : 'Make public')
+    if (options.hiddenFromStatusLists !== '') {
+        changes.push(options.hiddenFromStatusLists === 'true' ? 'Hide from status lists' : 'Show in status lists')
+    }
+    if (options.notes.trim()) changes.push('Replace notes')
+    for (const [name, action] of Object.entries(options.customLists)) {
+        if (action === 'add') changes.push(`Add to “${name}”`)
+        if (action === 'remove') changes.push(`Remove from “${name}”`)
+    }
+    return changes
+}
+
 export interface BulkProgress {
     current: number
     total: number
@@ -42,6 +60,8 @@ type LastOperation =
 
 /** AniList accepts ~10 aliased mutations per request comfortably */
 const CHUNK_SIZE = 10
+/** Ids per UpdateMediaListEntries call: keeps each response small and a failure local */
+const FAST_PATH_CHUNK_SIZE = 100
 
 const chunk = <T,>(arr: T[], size: number): T[][] =>
     Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
@@ -103,6 +123,18 @@ const buildUpdates = (options: BulkFormOptions, parsed: { score?: number; progre
     return updates
 }
 
+/**
+ * An entry hidden from status lists and on no custom list disappears from
+ * every list view on AniList, including this app's, with no way back from the
+ * UI. True when this edit would put an entry into that state.
+ */
+const wouldOrphan = (entry: MediaList, updates: EntryUpdates, customLists: Record<string, CustomListAction>) => {
+    const listsAfter = applyCustomListChanges(entry.customLists, customLists)
+    const hiddenAfter = updates.hiddenFromStatusLists ?? entry.hiddenFromStatusLists ?? false
+    const orphanedBefore = !!entry.hiddenFromStatusLists && applyCustomListChanges(entry.customLists, {}).length === 0
+    return hiddenAfter && listsAfter.length === 0 && !orphanedBefore
+}
+
 /** Custom-list path: aliased SaveMediaListEntry, settled per entry */
 const saveChunked = async (
     client: AniListClient,
@@ -127,9 +159,36 @@ const saveChunked = async (
         const confirmed = results.flatMap(r => (r.ok ? [r.data] : []))
         useStore.getState().mergeMediaListEntries(confirmed)
         ledger.ok(batch.filter((_, i) => results[i].ok).map(b => b.id))
+        // After Stop, entries that were never sent stay unattempted, not failed
         results.forEach((r, i) => {
-            if (!r.ok) ledger.fail([batch[i].id], r.message)
+            if (!r.ok && (r.blamed || !signal.aborted)) ledger.fail([batch[i].id], r.message)
         })
+        signal.throwIfAborted()
+    }
+}
+
+/** Fast path: UpdateMediaListEntries per chunk; a chunk it rejects falls back to per-entry saves */
+const updateFast = async (
+    client: AniListClient,
+    entries: MediaList[],
+    updates: EntryUpdates,
+    ledger: Ledger,
+    signal: AbortSignal
+) => {
+    for (const batch of chunk(entries, FAST_PATH_CHUNK_SIZE)) {
+        const ids = batch.map(e => e.id)
+        try {
+            // AniList drops IDs it did not update, so only confirmed IDs settle
+            const results = await client.updateMediaListEntries(ids, updates, { signal })
+            const returned = new Set(results.map(r => r.id))
+            useStore.getState().mergeMediaListEntries(results)
+            ledger.ok(ids.filter(id => returned.has(id)))
+            ledger.fail(ids.filter(id => !returned.has(id)), 'AniList did not confirm this entry')
+        } catch (error) {
+            if (isAbortError(error)) throw error
+            console.error('UpdateMediaListEntries failed, falling back to per-entry saves:', error)
+            await saveChunked(client, batch.map(e => ({ id: e.id, mediaId: e.mediaId, updates })), ledger, signal)
+        }
     }
 }
 
@@ -149,6 +208,9 @@ export function useBulkOperations(client: AniListClient | null) {
 
     const abortRef = useRef<AbortController | null>(null)
     const lastOperationRef = useRef<LastOperation | null>(null)
+    // Claimed synchronously before any await, so a second click during the
+    // pre-run refresh can't start a parallel run (render state lags behind)
+    const runningRef = useRef(false)
 
     const isProcessing = operation === 'update'
     const isDeleting = operation === 'delete'
@@ -199,18 +261,33 @@ export function useBulkOperations(client: AniListClient | null) {
         }
 
         abortRef.current = null
+        runningRef.current = false
         setOperation(null)
         setIsCancelling(false)
     }
 
-    const runBulkUpdate = useCallback(async (options: BulkFormOptions, entriesOverride?: MediaList[]) => {
-        if (!client || isBusy) return
+    /** Claims the single run slot; false when a run is already going */
+    const claim = (kind: Operation) => {
+        if (runningRef.current) return false
+        runningRef.current = true
+        setOperation(kind)
+        return true
+    }
+
+    const release = () => {
+        runningRef.current = false
+        setOperation(null)
+    }
+
+    /** Resolves true when a run started; false when it was refused before touching AniList */
+    const runBulkUpdate = useCallback(async (options: BulkFormOptions, entriesOverride?: MediaList[]): Promise<boolean> => {
+        if (!client) return false
 
         const store = useStore.getState()
         const parsed = parseEditInput(options.score, options.progress, store.user?.mediaListOptions?.scoreFormat)
         if (!parsed.ok) {
             store.addNotification({ type: 'error', message: parsed.message })
-            return
+            return false
         }
 
         const updates = buildUpdates(options, parsed)
@@ -219,25 +296,11 @@ export function useBulkOperations(client: AniListClient | null) {
 
         if (Object.keys(updates).length === 0 && !hasCustomListChanges) {
             store.addNotification({ type: 'warning', message: 'Pick at least one field to change' })
-            return
+            return false
         }
 
         let entries = entriesOverride ?? store.getSelectedEntries()
-        if (entries.length === 0) return
-
-        // AniList drops an entry that is hidden from status lists and on no
-        // custom list from every list view, including this app's, with no way
-        // back from the UI. Refuse rather than make entries vanish.
-        if (updates.hiddenFromStatusLists === true) {
-            const orphaned = entries.filter(e => applyCustomListChanges(e.customLists, customListChanges).length === 0).length
-            if (orphaned > 0) {
-                store.addNotification({
-                    type: 'error',
-                    message: `${orphaned} of the selected entries ${orphaned === 1 ? 'is' : 'are'} on no custom list. Hiding ${orphaned === 1 ? 'it' : 'them'} from status lists would remove ${orphaned === 1 ? 'it' : 'them'} from every list on AniList, including this app — add a custom list in the same edit first.`
-                })
-                return
-            }
-        }
+        if (entries.length === 0 || !claim('update')) return false
 
         // customLists is a full-replacement array on AniList's side, so a write
         // built from stale entry data silently drops memberships added
@@ -254,9 +317,23 @@ export function useBulkOperations(client: AniListClient | null) {
                     entries = [...fresh.animeLists, ...fresh.mangaLists].filter(e => idSet.has(e.id))
                 } catch {
                     store.addNotification({ type: 'error', message: 'Could not refresh list data — aborting custom list changes' })
-                    return
+                    release()
+                    return false
                 }
             }
+        }
+
+        // Checked on the (possibly refreshed) entries, per entry: removing a
+        // last custom list orphans an already-hidden entry just as hiding does
+        const orphaned = entries.filter(e => wouldOrphan(e, updates, customListChanges)).length
+        if (orphaned > 0) {
+            const one = orphaned === 1
+            store.addNotification({
+                type: 'error',
+                message: `${orphaned} of the selected entries would end up hidden from status lists and on no custom list, which removes ${one ? 'it' : 'them'} from every list on AniList, including this app. Keep ${one ? 'it' : 'them'} on a custom list or unhide ${one ? 'it' : 'them'} in the same edit.`
+            })
+            release()
+            return false
         }
 
         lastOperationRef.current = { type: 'update', options }
@@ -264,20 +341,7 @@ export function useBulkOperations(client: AniListClient | null) {
 
         try {
             if (!hasCustomListChanges) {
-                // Fast path: one UpdateMediaListEntries call for the whole selection.
-                // AniList drops IDs it did not update, so only confirmed IDs settle.
-                const allIds = entries.map(e => e.id)
-                try {
-                    const results = await client.updateMediaListEntries(allIds, updates, { signal })
-                    const returned = new Set(results.map(r => r.id))
-                    useStore.getState().mergeMediaListEntries(results)
-                    ledger.ok(allIds.filter(id => returned.has(id)))
-                    ledger.fail(allIds.filter(id => !returned.has(id)), 'AniList did not confirm this entry')
-                } catch (error) {
-                    if (isAbortError(error)) throw error
-                    console.error('UpdateMediaListEntries failed, falling back to per-entry saves:', error)
-                    await saveChunked(client, entries.map(entry => ({ id: entry.id, mediaId: entry.mediaId, updates })), ledger, signal)
-                }
+                await updateFast(client, entries, updates, ledger, signal)
             } else {
                 await saveChunked(
                     client,
@@ -295,13 +359,14 @@ export function useBulkOperations(client: AniListClient | null) {
         } finally {
             finishRun('update', ledger)
         }
-    }, [client, isBusy])
+        return true
+    }, [client])
 
     const runBulkDelete = useCallback(async (entriesOverride?: MediaList[]) => {
-        if (!client || isBusy) return
+        if (!client) return
 
         const entries = entriesOverride ?? useStore.getState().getSelectedEntries()
-        if (entries.length === 0) return
+        if (entries.length === 0 || !claim('delete')) return
 
         lastOperationRef.current = { type: 'delete' }
         const { ledger, signal } = startRun('delete', entries)
@@ -328,15 +393,16 @@ export function useBulkOperations(client: AniListClient | null) {
                 ledger.ok(gone)
                 const goneSet = new Set(gone)
                 results.forEach((r, i) => {
-                    if (!r.ok && !goneSet.has(batch[i])) ledger.fail([batch[i]], r.message)
+                    if (!r.ok && !goneSet.has(batch[i]) && (r.blamed || !signal.aborted)) ledger.fail([batch[i]], r.message)
                 })
+                signal.throwIfAborted()
             }
         } catch (error) {
             if (!isAbortError(error)) console.error('Bulk delete failed:', error)
         } finally {
             finishRun('delete', ledger)
         }
-    }, [client, isBusy])
+    }, [client])
 
     const retryFailed = useCallback(() => {
         const last = lastOperationRef.current

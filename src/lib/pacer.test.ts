@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { Pacer, sleepUntil } from './pacer'
+import { Pacer, isAbortError, sleepUntil } from './pacer'
 
 // Mirrors RequestPacerTests.swift from the iOS app
 const t0 = 1_000_000_000
@@ -103,5 +103,27 @@ describe('sleepUntil', () => {
         const controller = new AbortController()
         controller.abort()
         await expect(sleepUntil(Date.now() - 1, controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    })
+})
+
+describe('Pacer.acquire', () => {
+    test('a penalty during the wait sends the caller behind it', async () => {
+        // 600/min = one slot every 100 ms; burst 1 so the second caller must wait
+        const pacer = new Pacer(600, 1)
+        await pacer.acquire()
+        const waiting = pacer.acquire()
+        const until = Date.now() + 300
+        pacer.penalize(until)
+        await waiting
+        expect(Date.now()).toBeGreaterThanOrEqual(until)
+    })
+
+    test('aborting the wait rejects with AbortError', async () => {
+        const pacer = new Pacer(60, 1)
+        await pacer.acquire()
+        const controller = new AbortController()
+        const waiting = pacer.acquire(controller.signal)
+        controller.abort()
+        expect(await waiting.then(() => null, (e: unknown) => e)).toSatisfy(isAbortError)
     })
 })
