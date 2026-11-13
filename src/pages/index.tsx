@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useStore } from '@/store'
+import { selectCurrentLists, useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { AniListClient } from '@/lib/anilist'
 import { refreshProfile } from '@/lib/auth'
 import Layout from '@/components/Layout'
@@ -27,8 +28,21 @@ export default function Home() {
     viewMode,
     addNotification,
     toggleDarkMode,
-    getCurrentLists,
-  } = useStore()
+    currentLists,
+  } = useStore(
+    useShallow(s => ({
+      user: s.user,
+      accessToken: s.accessToken,
+      darkMode: s.darkMode,
+      currentType: s.currentType,
+      isLoadingLists: s.isLoadingLists,
+      bulkEditMode: s.bulkEditMode,
+      viewMode: s.viewMode,
+      addNotification: s.addNotification,
+      toggleDarkMode: s.toggleDarkMode,
+      currentLists: selectCurrentLists(s),
+    }))
+  )
 
   // The store hydrates from localStorage on the client only; render the same
   // placeholder as the server until mounted so hydration matches
@@ -91,7 +105,7 @@ export default function Home() {
     )
   }
 
-  const hasData = getCurrentLists().length > 0
+  const hasData = currentLists.length > 0
   const showSkeleton = isLoadingLists && !hasData
   const showRefreshBar = (isLoadingLists || isManualRefreshing) && hasData
 
@@ -144,7 +158,7 @@ export default function Home() {
           </div>
           {/* Slim refresh indicator: keeps content visible during refetches */}
           {showRefreshBar && (
-            <ProgressBar value={0} max={1} indeterminate className="h-0.5 rounded-none bg-transparent" />
+            <ProgressBar value={0} max={1} indeterminate label="Refreshing lists" className="h-0.5 rounded-none bg-transparent" />
           )}
         </header>
 

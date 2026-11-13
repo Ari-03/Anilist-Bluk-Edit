@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { AnimatePresence, m } from 'framer-motion'
 import { activateAccount, refreshProfile, signOutAccount, signOutAll } from '@/lib/auth'
 import { useStore } from '@/store'
 import TokenLoginForm from '@/components/TokenLoginForm'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import Modal, { ModalTitle } from '@/components/ui/Modal'
 import { cn } from '@/lib/utils'
 import { Check, ChevronDown, LogOut, UserPlus, X, ExternalLink } from 'lucide-react'
 
@@ -19,10 +19,9 @@ export default function AccountSwitcher() {
     const [open, setOpen] = useState(false)
     const [showAddAccount, setShowAddAccount] = useState(false)
     const [confirmSignOutAll, setConfirmSignOutAll] = useState(false)
-    const [mounted, setMounted] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
-
-    useEffect(() => setMounted(true), [])
+    // Dialogs opened from the menu return focus here, since the menu item is gone by then
+    const triggerRef = useRef<HTMLButtonElement>(null)
 
     useEffect(() => {
         if (!open) return
@@ -68,9 +67,11 @@ export default function AccountSwitcher() {
     return (
         <div className="relative" ref={menuRef}>
             <button
+                ref={triggerRef}
                 onClick={() => setOpen(!open)}
                 className="flex items-center gap-2 h-10 pl-1.5 pr-2 rounded-lg hover:bg-raised transition-colors"
                 title="Accounts"
+                aria-expanded={open}
             >
                 <Image
                     src={user.avatar?.medium || '/default-avatar.png'}
@@ -171,71 +172,46 @@ export default function AccountSwitcher() {
                 )}
             </AnimatePresence>
 
-            {/* Add-account dialog — portaled to <body>: the header's backdrop-filter
-                would otherwise become the containing block for this fixed overlay,
-                centering it on the header instead of the viewport. */}
-            {mounted &&
-                createPortal(
-                    <AnimatePresence>
-                        {showAddAccount && (
-                            <m.div
-                                className="fixed inset-0 z-confirm flex items-center justify-center p-4"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.15 }}
-                            >
-                                <div
-                                    className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
-                                    onClick={() => setShowAddAccount(false)}
-                                />
-                                <m.div
-                                    role="dialog"
-                                    aria-modal="true"
-                                    className="relative w-full max-w-sm card p-6 shadow-overlay"
-                                    initial={{ opacity: 0, scale: 0.95, y: 8 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.97, y: 4 }}
-                                    transition={{ duration: 0.18, ease: 'easeOut' }}
-                                >
-                                    <div className="flex items-start justify-between mb-4">
-                                        <h3 className="text-base font-semibold text-fg">Add another account</h3>
-                                        <button
-                                            onClick={() => setShowAddAccount(false)}
-                                            className="btn-icon w-8 h-8 -mt-1 -mr-1"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                    <div className="space-y-3 mb-4 text-sm text-fg-muted">
-                                        <p>AniList uses the account already signed in on its website.</p>
-                                        <ol className="list-decimal pl-5 space-y-2">
-                                            <li>
-                                                Open AniList, log out from the avatar menu, and sign in to the account
-                                                you want to add.
-                                            </li>
-                                            <li>Return here and connect that account.</li>
-                                        </ol>
-                                        <a
-                                            href="https://anilist.co"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="btn-secondary w-full"
-                                        >
-                                            <ExternalLink className="w-4 h-4" />
-                                            Open AniList to switch accounts
-                                        </a>
-                                        <p className="text-xs text-fg-subtle">
-                                            Your saved accounts stay connected here.
-                                        </p>
-                                    </div>
-                                    <TokenLoginForm addAccount />
-                                </m.div>
-                            </m.div>
-                        )}
-                    </AnimatePresence>,
-                    document.body
-                )}
+            <Modal
+                open={showAddAccount}
+                onClose={() => setShowAddAccount(false)}
+                className="max-w-sm p-6"
+                fallbackFocus={triggerRef}
+            >
+                <div className="flex items-start justify-between mb-4">
+                    <ModalTitle className="text-base font-semibold text-fg">Add another account</ModalTitle>
+                    <button
+                        onClick={() => setShowAddAccount(false)}
+                        className="btn-icon w-8 h-8 -mt-1 -mr-1"
+                        aria-label="Close"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="space-y-3 mb-4 text-sm text-fg-muted">
+                    <p>AniList uses the account already signed in on its website.</p>
+                    <ol className="list-decimal pl-5 space-y-2">
+                        <li>
+                            Open AniList, log out from the avatar menu, and sign in to the account
+                            you want to add.
+                        </li>
+                        <li>Return here and connect that account.</li>
+                    </ol>
+                    <a
+                        href="https://anilist.co"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-secondary w-full"
+                    >
+                        <ExternalLink className="w-4 h-4" />
+                        Open AniList to switch accounts
+                    </a>
+                    <p className="text-xs text-fg-subtle">
+                        Your saved accounts stay connected here.
+                    </p>
+                </div>
+                <TokenLoginForm addAccount />
+            </Modal>
 
             <ConfirmDialog
                 open={confirmSignOutAll}
@@ -244,6 +220,7 @@ export default function AccountSwitcher() {
                 danger
                 onConfirm={handleSignOutAll}
                 onCancel={() => setConfirmSignOutAll(false)}
+                fallbackFocus={triggerRef}
             >
                 All saved accounts will be removed from this browser.
             </ConfirmDialog>

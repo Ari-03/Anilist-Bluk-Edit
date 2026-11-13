@@ -1,5 +1,6 @@
 import { AnimatePresence, m } from 'framer-motion'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { MediaListStatus, MediaType } from '@/types/anilist'
 import { getStatusLabel } from '@/lib/anilist'
 import { COUNTRIES } from '@/components/sidebar/CountryFilter'
@@ -14,7 +15,14 @@ interface Chip {
 
 /** Dismissible summary of every active filter, shown above the grid */
 export default function ActiveFilterChips() {
-    const { filters, setFilters, clearFilters, currentType } = useStore()
+    const { filters, setFilters, clearFilters, currentType } = useStore(
+        useShallow(s => ({
+            filters: s.filters,
+            setFilters: s.setFilters,
+            clearFilters: s.clearFilters,
+            currentType: s.currentType,
+        }))
+    )
 
     const chips: Chip[] = []
 

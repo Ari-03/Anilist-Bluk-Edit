@@ -90,6 +90,7 @@ export default function CustomListsField({
                                     type="button"
                                     disabled={disabled}
                                     onClick={() => cycle(listName)}
+                                    aria-label={`${listName}: ${state === 'add' ? 'will be added' : state === 'remove' ? 'will be removed' : 'no change'}`}
                                     className={cn(
                                         'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-all duration-150 disabled:opacity-50',
                                         state === null && 'border-edge text-fg-muted hover:border-fg-subtle hover:text-fg',

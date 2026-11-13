@@ -12,7 +12,7 @@ export default function ListToolbar() {
     const shown = useStore(s => s.filteredEntries.length)
     const total = useStore(s => s.getCurrentLists().length)
     const search = useStore(s => s.filters.search ?? '')
-    const setFilters = useStore(s => s.setFilters)
+    const setSearch = useStore(s => s.setSearch)
     const viewMode = useStore(s => s.viewMode)
     const setViewMode = useStore(s => s.setViewMode)
     const bulkEditMode = useStore(s => s.bulkEditMode)
@@ -44,12 +44,12 @@ export default function ListToolbar() {
                     placeholder="Search titles…"
                     aria-label="Search titles"
                     value={search}
-                    onChange={(e) => setFilters({ search: e.target.value })}
+                    onChange={(e) => setSearch(e.target.value)}
                     className="input pl-9 pr-8"
                 />
                 {search && (
                     <button
-                        onClick={() => setFilters({ search: '' })}
+                        onClick={() => setSearch('')}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-subtle hover:text-fg"
                         aria-label="Clear search"
                     >

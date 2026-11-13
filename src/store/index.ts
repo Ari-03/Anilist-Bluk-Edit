@@ -142,6 +142,8 @@ interface AppActions {
 
     // Filter actions
     setFilters: (filters: Partial<FilterOptions>) => void
+    /** Updates the search text now; the list refilters once typing pauses */
+    setSearch: (search: string) => void
     clearFilters: () => void
     applyFilters: () => void
     setShowHiddenFromStatusLists: (show: boolean) => void
@@ -243,6 +245,13 @@ const initialState: AppState = {
     notifications: [],
     darkMode: true, // dark-first; persisted preference wins for returning users
 }
+
+/** Selector for the active media type's entries (use inside useStore so renders track list changes) */
+export const selectCurrentLists = (state: Pick<AppState, 'currentType' | 'animeLists' | 'mangaLists'>) =>
+    state.currentType === MediaType.ANIME ? state.animeLists : state.mangaLists
+
+const SEARCH_DEBOUNCE_MS = 150
+let searchRefilter: ReturnType<typeof setTimeout> | undefined
 
 export const useStore = create<AppState & AppActions>()(
     devtools(
@@ -564,6 +573,13 @@ export const useStore = create<AppState & AppActions>()(
                     const filters = { ...currentFilters, ...newFilters }
                     set({ filters })
                     get().applyFilters()
+                },
+                // Re-applying later is harmless: applyFilters always reads the
+                // current filters, so a reset in the meantime simply wins
+                setSearch: (search) => {
+                    set(state => ({ filters: { ...state.filters, search } }))
+                    clearTimeout(searchRefilter)
+                    searchRefilter = setTimeout(() => get().applyFilters(), SEARCH_DEBOUNCE_MS)
                 },
                 clearFilters: () => {
                     set({ filters: initialState.filters })

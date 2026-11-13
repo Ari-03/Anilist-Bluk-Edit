@@ -40,6 +40,7 @@ export default function BulkProgress({ operation, progress, isCancelling, onCanc
                 value={progress.current}
                 max={progress.total}
                 barClassName={isDelete ? 'bg-danger' : undefined}
+                label={isDelete ? 'Deleting entries' : 'Updating entries'}
             />
             <div className="flex items-center justify-between gap-4 text-[11px] text-fg-subtle tabular-nums">
                 <span className="flex items-center gap-4">

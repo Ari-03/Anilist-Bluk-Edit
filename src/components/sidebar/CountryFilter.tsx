@@ -1,4 +1,5 @@
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import CheckboxList from '@/components/sidebar/CheckboxList'
 
 export const COUNTRIES = [
@@ -9,7 +10,12 @@ export const COUNTRIES = [
 ]
 
 export default function CountryFilter() {
-    const { filters, setFilters } = useStore()
+    const { filters, setFilters } = useStore(
+        useShallow(s => ({
+            filters: s.filters,
+            setFilters: s.setFilters,
+        }))
+    )
 
     const toggle = (country: string) => {
         const countryArray = filters.country || []

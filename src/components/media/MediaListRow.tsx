@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { memo, ReactNode } from 'react'
 import { Image as IKImage } from '@imagekit/next'
 import { MediaList, MediaType } from '@/types/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'
@@ -15,13 +15,14 @@ interface MediaListRowProps {
     selectionActive?: boolean
     showStatus?: boolean
     syncState?: 'pending' | 'error'
-    onToggleSelect: () => void
-    onStartEdit: () => void
-    onDelete: () => void
+    // Take the entry (or id) so one stable callback serves every card and memo holds
+    onToggleSelect: (id: number) => void
+    onStartEdit: (entry: MediaList) => void
+    onDelete: (entry: MediaList) => void
     editForm?: ReactNode
 }
 
-export default function MediaListRow({
+function MediaListRow({
     entry,
     currentType,
     bulkEditMode,
@@ -40,7 +41,7 @@ export default function MediaListRow({
         if (!bulkEditMode) return
         const target = e.target as HTMLElement
         if (target.closest('button, a, input, select, textarea')) return
-        onToggleSelect()
+        onToggleSelect(entry.id)
     }
 
     return (
@@ -60,7 +61,7 @@ export default function MediaListRow({
                 <button
                     onClick={(e) => {
                         e.stopPropagation()
-                        onToggleSelect()
+                        onToggleSelect(entry.id)
                     }}
                     className={cn(
                         'flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-150',
@@ -68,6 +69,9 @@ export default function MediaListRow({
                             ? 'bg-purple border-purple text-white'
                             : 'border-edge-strong text-transparent hover:border-purple'
                     )}
+                    role="checkbox"
+                    aria-checked={selected}
+                    aria-label={`Select ${title}`}
                     title={selected ? 'Deselect' : 'Select'}
                 >
                     <Check className="w-3 h-3" strokeWidth={3} />
@@ -130,7 +134,7 @@ export default function MediaListRow({
             {!editForm && (
                 <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
                     <button
-                        onClick={onStartEdit}
+                        onClick={() => onStartEdit(entry)}
                         className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-raised transition-colors"
                         title="Quick edit"
                     >
@@ -146,7 +150,7 @@ export default function MediaListRow({
                         <ExternalLink className="w-4 h-4" />
                     </a>
                     <button
-                        onClick={onDelete}
+                        onClick={() => onDelete(entry)}
                         className="p-1.5 rounded-md text-fg-muted hover:text-danger hover:bg-danger/10 transition-colors"
                         title="Delete entry"
                     >
@@ -157,3 +161,5 @@ export default function MediaListRow({
         </div>
     )
 }
+
+export default memo(MediaListRow)

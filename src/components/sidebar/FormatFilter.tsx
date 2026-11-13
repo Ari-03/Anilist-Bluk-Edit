@@ -1,4 +1,5 @@
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { MediaType, MediaFormat } from '@/types/anilist'
 import CheckboxList from '@/components/sidebar/CheckboxList'
 
@@ -19,7 +20,13 @@ const MANGA_FORMATS = [
 ]
 
 export default function FormatFilter() {
-    const { currentType, filters, setFilters } = useStore()
+    const { currentType, filters, setFilters } = useStore(
+        useShallow(s => ({
+            currentType: s.currentType,
+            filters: s.filters,
+            setFilters: s.setFilters,
+        }))
+    )
     const formats = currentType === MediaType.ANIME ? ANIME_FORMATS : MANGA_FORMATS
 
     const toggle = (format: string) => {

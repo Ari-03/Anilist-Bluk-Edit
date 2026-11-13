@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence, m } from 'framer-motion'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { AniListClient } from '@/lib/anilist'
 import { MediaType } from '@/types/anilist'
 import { parseEditInput } from '@/lib/scoreFormat'
@@ -37,7 +38,19 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         selectAllEntries,
         clearSelection,
         getSelectedEntries,
-    } = useStore()
+    } = useStore(
+        useShallow(s => ({
+            selectedEntries: s.selectedEntries,
+            bulkEditMode: s.bulkEditMode,
+            filteredEntries: s.filteredEntries,
+            user: s.user,
+            currentType: s.currentType,
+            setBulkEditMode: s.setBulkEditMode,
+            selectAllEntries: s.selectAllEntries,
+            clearSelection: s.clearSelection,
+            getSelectedEntries: s.getSelectedEntries,
+        }))
+    )
 
     const bulk = useBulkOperations(client)
     const [formOpen, setFormOpen] = useState(false)
