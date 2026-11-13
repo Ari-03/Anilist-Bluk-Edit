@@ -156,7 +156,7 @@ function MediaCard({
                        card opens the entry, where the same actions are labelled buttons */
                     <div
                         className={cn(
-                            'absolute right-2 flex flex-col gap-1 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0 [@media(hover:none)]:pointer-events-none focus-within:pointer-events-auto transition-all duration-150 motion-reduce:transition-none motion-reduce:translate-x-0',
+                            'absolute right-2 flex flex-col gap-1 opacity-0 translate-x-1 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0 [@media(hover:none)]:pointer-events-none focus-within:pointer-events-auto transition-all duration-150 motion-reduce:transition-none motion-reduce:translate-x-0',
                             // Sit below the status or format chip when the card has one
                             (showStatus && entry.status) || format ? 'top-9' : 'top-2'
                         )}

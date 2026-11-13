@@ -130,11 +130,12 @@ function MediaListRow({
                 </span>
             )}
 
-            {/* Hover shortcuts, laid over the row's right edge so they reserve no space.
-                Touch has no hover: tapping the row opens the entry, where the same
-                actions are labelled buttons */}
+            {/* Shortcuts laid over the row's right edge, so they reserve no space. Shown
+                on hover with a mouse and on keyboard focus everywhere. Touch has no
+                hover, so taps pass through to the row, which opens the entry where
+                the same actions are labelled buttons */}
             {!bulkEditMode && (
-                <div className="hidden [@media(hover:hover)]:flex absolute right-2 top-1/2 -translate-y-1/2 items-center gap-1 rounded-md bg-raised opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-md bg-raised opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:pointer-events-none focus-within:pointer-events-auto transition-opacity duration-150">
                     <button
                         onClick={() => onStartEdit(entry)}
                         className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-edge/60 transition-colors"

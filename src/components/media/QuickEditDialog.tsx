@@ -54,7 +54,8 @@ export default function QuickEditDialog({
     const total = entry?.media?.episodes || entry?.media?.chapters
 
     return (
-        <Modal open={entry !== null} onClose={onCancel} dismissible={!busy} className="max-w-md">
+        // Capped to the screen and scrollable, so Save stays reachable on a landscape phone
+        <Modal open={entry !== null} onClose={onCancel} dismissible={!busy} className="max-w-md max-h-full overflow-y-auto">
             {entry && (
                 <form
                     className="p-4 space-y-4"
