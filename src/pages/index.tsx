@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
+import { refreshProfile } from '@/lib/auth'
 import Layout from '@/components/Layout'
 import MediaListView from '@/components/media/MediaListView'
 import MediaGridSkeleton from '@/components/media/MediaGridSkeleton'
@@ -16,86 +16,60 @@ import ProgressBar from '@/components/ui/ProgressBar'
 import { Layers, Moon, Sun, RotateCcw, SlidersHorizontal } from 'lucide-react'
 
 export default function Home() {
-  const { user: authUser, accessToken, isLoading: authLoading } = useAuth()
   const {
     user,
+    accessToken,
     darkMode,
     currentType,
     isLoadingLists,
     bulkEditMode,
     viewMode,
-    setUser,
-    setAccessToken,
-    upsertAccount,
     addNotification,
     toggleDarkMode,
     getCurrentLists,
   } = useStore()
 
-  const [client, setClient] = useState<AniListClient | null>(null)
+  // The store hydrates from localStorage on the client only; render the same
+  // placeholder as the server until mounted so hydration matches
+  const [mounted, setMounted] = useState(false)
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const profileChecked = useRef(false)
+
+  const client = useMemo(() => (accessToken ? new AniListClient(accessToken) : null), [accessToken])
+  const userId = user?.id
+
+  // Re-validate the saved account once per page load. Its cached profile is
+  // shown immediately; a revoked token signs it out, an outage is ignored.
+  useEffect(() => {
+    setMounted(true)
+    if (profileChecked.current) return
+    profileChecked.current = true
+    void refreshProfile({ quiet: true })
+  }, [])
 
   const handleManualRefresh = async () => {
-    if (!client || !authUser || isManualRefreshing) return
+    if (!client || userId === undefined || isManualRefreshing) return
     setIsManualRefreshing(true)
     try {
-      await useStore.getState().fetchMediaLists(authUser.id, currentType, true)
+      await useStore.getState().fetchMediaLists(userId, currentType, true)
       addNotification({ type: 'success', message: 'Lists refreshed' })
-    } catch (error) {
-      addNotification({ type: 'error', message: 'Refresh failed — check your connection' })
+    } catch {
+      // fetchMediaLists already reported the error
     } finally {
       setIsManualRefreshing(false)
     }
   }
 
+  // Load lists for the active account (again after a switch, which clears
+  // them). Profile refreshes don't refetch: fetchMediaLists checks freshness.
   useEffect(() => {
-    if (accessToken) {
-      setClient(new AniListClient(accessToken))
-      setAccessToken(accessToken)
-    } else {
-      setClient(null)
+    if (client && userId !== undefined) {
+      useStore.getState().fetchMediaLists(userId, useStore.getState().currentType, false).catch(() => {})
     }
-  }, [accessToken, setAccessToken])
+  }, [client, userId])
 
-  // Always adopt the freshest auth user (session restore re-fetches the
-  // profile, so custom lists created on anilist.co propagate here) — the
-  // persisted store user must never win over fresh data for the same account.
-  useEffect(() => {
-    if (authUser) {
-      setUser(authUser)
-    }
-  }, [authUser, setUser])
-
-  // Keep the multi-account registry in sync: every successful auth (fresh
-  // sign-in, session restore, account switch) registers/activates the account
-  useEffect(() => {
-    if (authUser && accessToken) {
-      upsertAccount(authUser, accessToken)
-    }
-  }, [authUser, accessToken, upsertAccount])
-
-  // Load media lists when client and user are ready.
-  // currentType is NOT a dependency: both anime and manga are fetched at once.
-  useEffect(() => {
-    if (client && authUser && user) {
-      useStore.getState().fetchMediaLists(authUser.id, currentType, false)
-        .catch(() => {
-          addNotification({
-            type: 'error',
-            message: 'Failed to load your media lists. Please try refreshing.'
-          })
-        })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, authUser, user])
-
-  // Apply dark mode class to document
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode)
-  }, [darkMode])
-
-  if (authLoading) {
+  if (!mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
@@ -106,8 +80,14 @@ export default function Home() {
     )
   }
 
-  if (!accessToken || !authUser) {
-    return <TokenLogin />
+  if (!accessToken || !user) {
+    // Notifications stay visible here, e.g. why a revoked account was signed out
+    return (
+      <>
+        <TokenLogin />
+        <NotificationList />
+      </>
+    )
   }
 
   const hasData = getCurrentLists().length > 0

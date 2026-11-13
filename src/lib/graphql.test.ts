@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BATCH_ABORTED, describeError, splitAliases } from './graphql'
+import { AniListRequestError, BATCH_ABORTED, describeError, isInvalidTokenError, splitAliases } from './graphql'
 
 describe('splitAliases', () => {
     test('clean response: every alias succeeds in input order', () => {
@@ -71,5 +71,18 @@ describe('describeError', () => {
         expect(describeError({ message: 'validation', validation: { id: ['The selected id is invalid.'] } }))
             .toBe('The selected id is invalid.')
         expect(describeError({ message: 'Not Found.' })).toBe('Not Found.')
+    })
+})
+
+describe('isInvalidTokenError', () => {
+    test("AniList's bad-token answer (400 + 'Invalid token') is definitive", () => {
+        expect(isInvalidTokenError(new AniListRequestError(400, [{ message: 'Invalid token', status: 400 }]))).toBe(true)
+        expect(isInvalidTokenError(new AniListRequestError(401, [{ message: 'Unauthorized' }]))).toBe(true)
+    })
+
+    test('rate limits, timeouts and network errors are not', () => {
+        expect(isInvalidTokenError(new AniListRequestError(429, [{ message: 'Too Many Requests.', status: 429 }]))).toBe(false)
+        expect(isInvalidTokenError(new AniListRequestError(408, [{ message: 'AniList did not respond in time' }]))).toBe(false)
+        expect(isInvalidTokenError(new TypeError('Failed to fetch'))).toBe(false)
     })
 })

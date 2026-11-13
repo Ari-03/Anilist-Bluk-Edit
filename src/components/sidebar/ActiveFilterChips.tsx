@@ -83,7 +83,7 @@ export default function ActiveFilterChips() {
                         exit={{ opacity: 0, scale: 0.9 }}
                         transition={{ duration: 0.12 }}
                         onClick={chip.onRemove}
-                        className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
+                        className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 rounded-full bg-accent/10 text-accent-strong text-xs font-medium hover:bg-accent/20 transition-colors"
                         title="Remove filter"
                     >
                         {chip.label}

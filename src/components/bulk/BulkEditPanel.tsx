@@ -4,7 +4,7 @@ import { useStore } from '@/store'
 import { AniListClient } from '@/lib/anilist'
 import { MediaType } from '@/types/anilist'
 import { parseEditInput } from '@/lib/scoreFormat'
-import { useBulkOperations, BulkFormOptions, EMPTY_BULK_OPTIONS } from '@/hooks/useBulkOperations'
+import { useBulkOperations, BulkFormOptions, EMPTY_BULK_OPTIONS, summarizeBulkChanges } from '@/hooks/useBulkOperations'
 import BulkActionBar from '@/components/bulk/BulkActionBar'
 import BulkEditForm from '@/components/bulk/BulkEditForm'
 import BulkProgress from '@/components/bulk/BulkProgress'
@@ -13,6 +13,9 @@ import RelationFinderModal from '@/components/RelationFinderModal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { MediaList } from '@/types/anilist'
 import { CheckSquare, Save, X } from 'lucide-react'
+
+/** Bulk edits touching at least this many entries ask for confirmation first */
+const CONFIRM_THRESHOLD = 25
 
 interface BulkEditPanelProps {
     client: AniListClient | null
@@ -40,12 +43,15 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
     const [formOpen, setFormOpen] = useState(false)
     const [options, setOptions] = useState<BulkFormOptions>(EMPTY_BULK_OPTIONS)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [showApplyConfirm, setShowApplyConfirm] = useState(false)
     const [relationSeeds, setRelationSeeds] = useState<MediaList[] | null>(null)
 
     const selectedCount = selectedEntries.size
     const totalCount = filteredEntries.length
     const allSelected = selectedCount === totalCount && totalCount > 0
     const inputValid = parseEditInput(options.score, options.progress, user?.mediaListOptions?.scoreFormat).ok
+    const changes = summarizeBulkChanges(options, currentType)
+    const entriesLabel = `${selectedCount} ${selectedCount === 1 ? 'entry' : 'entries'}`
 
     const availableCustomLists = (() => {
         if (!user?.mediaListOptions) return []
@@ -53,10 +59,19 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
         return user.mediaListOptions[key]?.customLists || []
     })()
 
-    const handleApply = async () => {
-        await bulk.runBulkUpdate(options)
-        setFormOpen(false)
-        setOptions(EMPTY_BULK_OPTIONS)
+    // A refused run (invalid input, orphan guard, failed refresh) keeps the
+    // form open with the user's input so they can fix it
+    const runApply = async () => {
+        setShowApplyConfirm(false)
+        if (await bulk.runBulkUpdate(options)) {
+            setFormOpen(false)
+            setOptions(EMPTY_BULK_OPTIONS)
+        }
+    }
+
+    const handleApply = () => {
+        if (selectedCount >= CONFIRM_THRESHOLD) setShowApplyConfirm(true)
+        else void runApply()
     }
 
     const handleExit = () => {
@@ -113,18 +128,21 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                                 disabled={bulk.isBusy}
                                             />
                                         </div>
-                                        <div className="flex justify-end gap-2 pt-3 border-t border-edge mt-3">
+                                        <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-edge mt-3">
+                                            <p className="mr-auto min-w-0 text-xs text-fg-muted" aria-live="polite">
+                                                {changes.length > 0 ? changes.join(' · ') : 'Pick at least one field to change'}
+                                            </p>
                                             <button onClick={() => setFormOpen(false)} className="btn-secondary h-9 text-sm">
                                                 <X className="w-4 h-4" />
                                                 Close
                                             </button>
                                             <button
                                                 onClick={handleApply}
-                                                disabled={selectedCount === 0 || !inputValid}
+                                                disabled={selectedCount === 0 || !inputValid || changes.length === 0}
                                                 className="btn-primary h-9 text-sm"
                                             >
                                                 <Save className="w-4 h-4" />
-                                                Apply to {selectedCount} {selectedCount === 1 ? 'entry' : 'entries'}
+                                                Apply to {entriesLabel}
                                             </button>
                                         </div>
                                     </m.div>
@@ -171,6 +189,18 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                 client={client}
                 seedEntries={relationSeeds ?? []}
             />
+
+            <ConfirmDialog
+                open={showApplyConfirm}
+                title={`Apply to ${entriesLabel}?`}
+                confirmLabel={`Apply to ${selectedCount}`}
+                onConfirm={runApply}
+                onCancel={() => setShowApplyConfirm(false)}
+            >
+                <ul className="list-disc pl-5 space-y-0.5">
+                    {changes.map(change => <li key={change}>{change}</li>)}
+                </ul>
+            </ConfirmDialog>
 
             <ConfirmDialog
                 open={showDeleteConfirm}

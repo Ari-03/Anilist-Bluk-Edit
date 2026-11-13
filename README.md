@@ -41,7 +41,7 @@ A powerful web application for efficiently managing your AniList anime and manga
 ## Tech Stack
 
 - **Frontend**: Next.js 16, React 18, TypeScript
-- **Authentication**: Custom token-based authentication with AniList personal access tokens
+- **Authentication**: AniList OAuth (implicit grant); tokens stay in the browser and requests go straight to AniList
 - **State Management**: Zustand with persistence
 - **Styling**: Tailwind CSS with custom components
 - **API**: GraphQL with AniList API
@@ -74,12 +74,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Usage Guide
 
 ### Getting Started
-1. **Get Access Token**: Generate a personal access token from AniList
-   - Go to [AniList Developer Settings](https://anilist.co/settings/developer)
-   - Click "Create New Client" and note your Client ID
-   - Visit: `https://anilist.co/api/v2/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=token`
-   - Copy the access token from the URL after authorization
-2. **Sign In**: Enter your personal access token on the login page
+1. **Create an AniList client** at [AniList Developer Settings](https://anilist.co/settings/developer) with the redirect URL set to `<your app>/auth/callback`, and put its ID in `NEXT_PUBLIC_ANILIST_CLIENT_ID` (or paste it under "Use your own Client ID" on the login page)
+2. **Log in with AniList**: you're sent to anilist.co to authorize, then back to the app. Add more accounts from the account menu
 3. **Load Lists**: Your anime and manga lists will be automatically loaded
 
 ### Bulk Editing
@@ -113,11 +109,12 @@ src/
 │   ├── FilterPanel.tsx  # Filtering controls
 │   └── ...
 ├── lib/                # Utilities and clients
-│   └── anilist.ts      # AniList GraphQL client
+│   ├── anilist.ts      # AniList GraphQL client (direct, paced by lib/pacer.ts)
+│   └── auth.ts         # Accounts, OAuth, sign-in/out
 ├── pages/              # Next.js pages
 │   ├── index.tsx       # Home page
 │   ├── _app.tsx        # App wrapper
-│   └── api/auth/       # NextAuth.js API routes
+│   └── auth/callback.tsx # OAuth redirect target
 ├── store/              # State management
 │   └── index.ts        # Zustand store
 ├── styles/             # CSS styles

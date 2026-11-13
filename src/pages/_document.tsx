@@ -4,6 +4,9 @@ export default function Document() {
     return (
         <Html lang="en">
             <Head>
+                {/* Sets the theme class before first paint; must stay a blocking script */}
+                {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+                <script src="/theme.js" />
                 {/* Favicon configuration */}
                 <link rel="icon" type="image/x-icon" href="/favicon.ico" />
                 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />

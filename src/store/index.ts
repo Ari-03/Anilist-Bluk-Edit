@@ -6,6 +6,8 @@ import {
     MediaType,
     MediaListStatus
 } from '@/types/anilist'
+import { AniListClient } from '@/lib/anilist'
+import { AniListRequestError } from '@/lib/graphql'
 
 // Bulk edit types
 export interface BulkEditOptions {
@@ -53,7 +55,8 @@ interface AppState {
     user: User | null
     accessToken: string | null
 
-    // Multi-account registry; `user`/`accessToken` mirror the active account
+    // Multi-account registry, the only persisted copy of tokens.
+    // `user`/`accessToken` mirror the active account (see upsertAccount).
     accounts: Record<number, StoredAccount>
     activeAccountId: number | null
 
@@ -61,7 +64,7 @@ interface AppState {
     animeLists: MediaList[]
     mangaLists: MediaList[]
     isLoadingLists: boolean
-    lastDataLoad: number | null // Timestamp of last successful data load
+    lastDataLoad: number | null // When the in-memory lists were loaded (not persisted, like the lists)
 
     // Performance optimization: pre-sorted indices for fast range queries
     animeSortedIndices: SortedIndices | null
@@ -104,8 +107,6 @@ interface AppState {
 interface AppActions {
     // User actions
     setUser: (user: User | null) => void
-    setAccessToken: (token: string | null) => void
-    refreshUser: () => Promise<void>
     upsertAccount: (user: User, accessToken: string) => void
     removeAccount: (id: number) => void
     logout: () => void
@@ -251,24 +252,6 @@ export const useStore = create<AppState & AppActions>()(
 
                 // User actions
                 setUser: (user) => set({ user }),
-                setAccessToken: (accessToken) => set({ accessToken }),
-                // Re-fetch the viewer profile (incl. custom list names) so lists
-                // created on anilist.co after sign-in show up without a re-login
-                refreshUser: async () => {
-                    const { accessToken } = get()
-                    if (!accessToken) return
-                    try {
-                        const client = new (require('@/lib/anilist').AniListClient)(accessToken)
-                        const user = await client.getCurrentUser()
-                        if (user) set({ user })
-                    } catch (error) {
-                        console.error('Failed to refresh user profile:', error)
-                        get().addNotification({
-                            type: 'error',
-                            message: 'Could not refresh your profile from AniList'
-                        })
-                    }
-                },
                 // Register (or refresh) an account and make it active. Switching
                 // accounts clears all per-account data so nothing bleeds through.
                 upsertAccount: (user, accessToken) => {
@@ -335,9 +318,6 @@ export const useStore = create<AppState & AppActions>()(
                     })
                     const uniqueAnimeLists = Array.from(uniqueMap.values())
 
-                    if (uniqueAnimeLists.length < animeLists.length) {
-                    }
-
                     // Create sorted indices for performance optimization
                     const animeSortedIndices = createSortedIndices(uniqueAnimeLists)
 
@@ -355,9 +335,6 @@ export const useStore = create<AppState & AppActions>()(
                         }
                     })
                     const uniqueMangaLists = Array.from(uniqueMap.values())
-
-                    if (uniqueMangaLists.length < mangaLists.length) {
-                    }
 
                     // Create sorted indices for performance optimization
                     const mangaSortedIndices = createSortedIndices(uniqueMangaLists)
@@ -424,33 +401,23 @@ export const useStore = create<AppState & AppActions>()(
                 },
                 setIsLoadingLists: (isLoadingLists) => set({ isLoadingLists }),
                 setLastDataLoad: (lastDataLoad) => set({ lastDataLoad }),
+                // An empty list is valid data, so freshness is the timestamp alone
                 shouldReloadData: () => {
-                    const state = get()
-                    // Check if we have data in current session and if it's fresh
-                    const hasDataInMemory = state.animeLists.length > 0 && state.mangaLists.length > 0
-                    const hasTimestamp = state.lastDataLoad !== null
-
-                    if (hasDataInMemory && hasTimestamp) {
-                        const fiveMinutes = 5 * 60 * 1000 // Reduced from 1 hour to 5 minutes for better UX
-                        const isDataFresh = Date.now() - state.lastDataLoad! < fiveMinutes
-                        return !isDataFresh
-                    }
-
-                    return true
+                    const { lastDataLoad } = get()
+                    const fiveMinutes = 5 * 60 * 1000
+                    return lastDataLoad === null || Date.now() - lastDataLoad > fiveMinutes
                 },
 
-                fetchMediaLists: async (userId, type, force = false) => {
+                // Loads both collections (the type toggle needs both). Results for
+                // an account that is no longer active are dropped.
+                fetchMediaLists: async (userId, _type, force = false) => {
                     const state = get()
                     if (!force && !state.shouldReloadData()) {
                         return
                     }
 
-                    set({ isLoadingLists: true, error: null })
-
-                    if (!state.accessToken) {
-                        const errorMessage = 'No access token available for loading media lists'
-                        console.error(errorMessage)
-                        set({ isLoadingLists: false, error: errorMessage })
+                    const { accessToken, activeAccountId } = state
+                    if (!accessToken) {
                         get().addNotification({
                             type: 'error',
                             message: 'Authentication required. Please sign in again.',
@@ -458,13 +425,16 @@ export const useStore = create<AppState & AppActions>()(
                         return
                     }
 
+                    set({ isLoadingLists: true, error: null })
+                    const stillActive = () => get().activeAccountId === activeAccountId
+
                     try {
-                        const client = new (require('@/lib/anilist').AniListClient)(state.accessToken)
-                        
+                        const client = new AniListClient(accessToken)
                         const [animeListsData, mangaListsData] = await Promise.all([
                             client.getAllMediaLists(userId, MediaType.ANIME),
                             client.getAllMediaLists(userId, MediaType.MANGA),
                         ])
+                        if (!stillActive()) return
 
                         set({
                             animeLists: animeListsData,
@@ -475,37 +445,28 @@ export const useStore = create<AppState & AppActions>()(
                             isLoadingLists: false,
                             error: null
                         })
-
-                        // Apply filters after setting data
                         get().applyFilters()
-                    } catch (error: any) {
-                        console.error('Failed to fetch media lists:', {
-                            error: error.message,
-                            status: error.status,
-                            details: error.details
-                        })
-                        
+                    } catch (error) {
+                        if (!stillActive()) return
+                        console.error('Failed to fetch media lists:', error)
+
+                        const status = error instanceof AniListRequestError ? error.status : undefined
                         let errorMessage = 'Failed to load your media lists.'
-                        if (error.status === 401) {
+                        if (status === 401 || status === 400) {
                             errorMessage = 'Authentication expired. Please sign in again.'
-                        } else if (error.status === 429) {
+                        } else if (status === 429) {
                             errorMessage = 'Rate limit exceeded. Please wait a moment and try again.'
-                        } else if (error.status === 500) {
+                        } else if (status !== undefined && status >= 500) {
                             errorMessage = 'AniList server error. Please try again later.'
                         } else if (!navigator.onLine) {
                             errorMessage = 'No internet connection. Please check your connection.'
                         }
-                        
-                        set({ 
-                            error: error instanceof Error ? error.message : 'Failed to load lists', 
-                            isLoadingLists: false 
+
+                        set({
+                            error: error instanceof Error ? error.message : 'Failed to load lists',
+                            isLoadingLists: false
                         })
-                        
-                        get().addNotification({
-                            type: 'error',
-                            message: errorMessage,
-                        })
-                        
+                        get().addNotification({ type: 'error', message: errorMessage })
                         throw error // Re-throw so calling code can handle it
                     }
                 },
@@ -618,7 +579,7 @@ export const useStore = create<AppState & AppActions>()(
 
                     // Early return if no lists
                     if (lists.length === 0) {
-                        set({ filteredEntries: [] })
+                        set({ filteredEntries: [], selectedEntries: new Set() })
                         return
                     }
 
@@ -824,7 +785,13 @@ export const useStore = create<AppState & AppActions>()(
                     lists.forEach(entry => uniqueMap.set(entry.id, entry))
                     lists = Array.from(uniqueMap.values())
 
-                    set({ filteredEntries: lists })
+                    // A bulk edit acts on the selection, so never let it include
+                    // entries a filter has hidden from view
+                    const { selectedEntries } = get()
+                    const visibleSelected = new Set(lists.filter(e => selectedEntries.has(e.id)).map(e => e.id))
+                    set(visibleSelected.size === selectedEntries.size
+                        ? { filteredEntries: lists }
+                        : { filteredEntries: lists, selectedEntries: visibleSelected })
                 },
 
                 // UI actions
@@ -868,31 +835,38 @@ export const useStore = create<AppState & AppActions>()(
                 version: 1,
                 // v0 stored a single user+accessToken; fold it into the accounts
                 // registry so existing users stay signed in after upgrading
-                migrate: (persisted: any, version: number) => {
-                    if (version === 0 && persisted?.user && persisted?.accessToken) {
-                        persisted.accounts = {
-                            [persisted.user.id]: {
-                                user: persisted.user,
-                                accessToken: persisted.accessToken,
-                                addedAt: Date.now()
-                            }
+                migrate: (persisted, version) => {
+                    const state = persisted as Partial<AppState>
+                    if (version === 0 && state.user && state.accessToken) {
+                        state.accounts = {
+                            [state.user.id]: { user: state.user, accessToken: state.accessToken, addedAt: Date.now() }
                         }
-                        persisted.activeAccountId = persisted.user.id
+                        state.activeAccountId = state.user.id
                     }
-                    return persisted
+                    return state as AppState & AppActions
+                },
+                // user/accessToken are derived from the registry, not stored twice
+                merge: (persisted, current) => {
+                    const state = persisted as Partial<AppState>
+                    const active = state.activeAccountId != null ? state.accounts?.[state.activeAccountId] : undefined
+                    return {
+                        ...current,
+                        ...state,
+                        user: active?.user ?? null,
+                        accessToken: active?.accessToken ?? null,
+                        // Older versions persisted this without the lists it described
+                        lastDataLoad: null,
+                        activeAccountId: active ? state.activeAccountId ?? null : null,
+                    }
                 },
                 partialize: (state) => ({
-                    // Only persist essential data to avoid quota exceeded errors
-                    user: state.user,
-                    accessToken: state.accessToken,
+                    // Lists aren't persisted (localStorage quota), so neither is lastDataLoad
                     accounts: state.accounts,
                     activeAccountId: state.activeAccountId,
                     darkMode: state.darkMode,
                     currentType: state.currentType,
                     filters: state.filters,
-                    lastDataLoad: state.lastDataLoad,
                     collapsedStatusSections: state.collapsedStatusSections,
-                    // Don't persist large arrays to avoid localStorage quota issues
                 }),
             }
         ),

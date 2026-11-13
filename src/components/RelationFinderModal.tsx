@@ -208,7 +208,7 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
                         <div className="flex items-center justify-between p-5 pb-4 border-b border-edge">
                             <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center">
-                                    <GitBranch className="w-[18px] h-[18px] text-accent" />
+                                    <GitBranch className="w-[18px] h-[18px] text-accent-strong" />
                                 </div>
                                 <div>
                                     <h3 className="text-base font-semibold text-fg">Sequels & prequels</h3>
@@ -231,7 +231,7 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
                         <div className="flex-1 overflow-y-auto p-5">
                             {phase === 'discovering' && (
                                 <div className="flex flex-col items-center py-12 text-center">
-                                    <Loader2 className="w-8 h-8 text-accent animate-spin mb-4" />
+                                    <Loader2 className="w-8 h-8 text-accent-strong animate-spin mb-4" />
                                     <p className="text-sm font-medium text-fg">Scanning the relation graph…</p>
                                     <p className="mt-1 text-xs text-fg-muted tabular-nums">
                                         {scanProgress.round > 0
@@ -274,7 +274,7 @@ export default function RelationFinderModal({ open, onClose, client, seedEntries
                                                     <span
                                                         className={cn(
                                                             'flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center border-2 transition-colors',
-                                                            isChecked ? 'bg-accent border-accent text-white' : 'border-edge text-transparent'
+                                                            isChecked ? 'bg-accent-strong border-accent-strong text-on-accent' : 'border-edge text-transparent'
                                                         )}
                                                     >
                                                         <Check className="w-3 h-3" strokeWidth={3} />
