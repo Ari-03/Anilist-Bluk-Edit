@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { ReactNode, RefObject } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import Modal, { ModalDescription, ModalTitle } from '@/components/ui/Modal'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,7 @@ interface ConfirmDialogProps {
     busy?: boolean
     onConfirm: () => void
     onCancel: () => void
+    fallbackFocus?: RefObject<HTMLElement | null>
 }
 
 export default function ConfirmDialog({
@@ -25,9 +26,10 @@ export default function ConfirmDialog({
     busy = false,
     onConfirm,
     onCancel,
+    fallbackFocus,
 }: ConfirmDialogProps) {
     return (
-        <Modal open={open} onClose={onCancel} dismissible={!busy} layer="z-confirm" className="max-w-md p-6" describedBy={!!children}>
+        <Modal open={open} onClose={onCancel} dismissible={!busy} layer="z-confirm" className="max-w-md p-6" describedBy={!!children} fallbackFocus={fallbackFocus}>
             <div className="flex items-start gap-3">
                 {danger && (
                     <div className="flex-shrink-0 w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center">

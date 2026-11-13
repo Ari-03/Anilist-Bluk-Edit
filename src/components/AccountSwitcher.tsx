@@ -20,6 +20,8 @@ export default function AccountSwitcher() {
     const [showAddAccount, setShowAddAccount] = useState(false)
     const [confirmSignOutAll, setConfirmSignOutAll] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
+    // Dialogs opened from the menu return focus here, since the menu item is gone by then
+    const triggerRef = useRef<HTMLButtonElement>(null)
 
     useEffect(() => {
         if (!open) return
@@ -65,6 +67,7 @@ export default function AccountSwitcher() {
     return (
         <div className="relative" ref={menuRef}>
             <button
+                ref={triggerRef}
                 onClick={() => setOpen(!open)}
                 className="flex items-center gap-2 h-10 pl-1.5 pr-2 rounded-lg hover:bg-raised transition-colors"
                 title="Accounts"
@@ -169,7 +172,12 @@ export default function AccountSwitcher() {
                 )}
             </AnimatePresence>
 
-            <Modal open={showAddAccount} onClose={() => setShowAddAccount(false)} className="max-w-sm p-6">
+            <Modal
+                open={showAddAccount}
+                onClose={() => setShowAddAccount(false)}
+                className="max-w-sm p-6"
+                fallbackFocus={triggerRef}
+            >
                 <div className="flex items-start justify-between mb-4">
                     <ModalTitle className="text-base font-semibold text-fg">Add another account</ModalTitle>
                     <button
@@ -212,6 +220,7 @@ export default function AccountSwitcher() {
                 danger
                 onConfirm={handleSignOutAll}
                 onCancel={() => setConfirmSignOutAll(false)}
+                fallbackFocus={triggerRef}
             >
                 All saved accounts will be removed from this browser.
             </ConfirmDialog>

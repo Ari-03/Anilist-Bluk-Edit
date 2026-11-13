@@ -1,4 +1,4 @@
-import { ReactNode, useRef } from 'react'
+import { ReactNode, RefObject, useRef } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { AnimatePresence, m } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -20,6 +20,8 @@ interface ModalProps {
     className?: string
     /** Set when the content has a ModalDescription */
     describedBy?: boolean
+    /** Where focus goes on close if the opener is gone (e.g. it lived in a closed menu) */
+    fallbackFocus?: RefObject<HTMLElement | null>
     children: ReactNode
 }
 
@@ -36,6 +38,7 @@ export default function Modal({
     layer = 'z-modal',
     className,
     describedBy = false,
+    fallbackFocus,
     children,
 }: ModalProps) {
     const sheet = variant === 'sheet-left'
@@ -69,7 +72,8 @@ export default function Modal({
                                 }}
                                 onCloseAutoFocus={(e) => {
                                     e.preventDefault()
-                                    if (returnFocus.current?.isConnected) returnFocus.current.focus()
+                                    const target = returnFocus.current?.isConnected ? returnFocus.current : fallbackFocus?.current
+                                    target?.focus()
                                 }}
                                 onEscapeKeyDown={guard}
                                 onPointerDownOutside={guard}
