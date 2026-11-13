@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { AniListClient } from './anilist'
+import { MediaType } from '@/types/anilist'
 
 const realFetch = globalThis.fetch
 afterEach(() => {
@@ -38,5 +39,38 @@ describe('AniListClient', () => {
         )
 
         expect(await new AniListClient('token').deleteMediaListEntry(5)).toEqual({ deleted: true })
+    })
+
+    test('favourite toggles are not retried on a server error, even if a caller asks', async () => {
+        let calls = 0
+        stubFetch(async () => {
+            calls++
+            return json({ data: null, errors: [{ message: 'Internal Server Error', status: 500 }] }, 500)
+        })
+        const toggling = new AniListClient('token').toggleFavourites([{ id: 1, type: MediaType.ANIME }], { retryTransient: true })
+        expect(await toggling.then(() => 'sent', () => 'failed')).toBe('failed')
+        expect(calls).toBe(1)
+    })
+
+    test('favourite state is read live per title', async () => {
+        stubFetch(async () => json({ data: {
+            m0: { id: 10, isFavourite: true, isFavouriteBlocked: false },
+            m1: { id: 11, isFavourite: false, isFavouriteBlocked: true },
+        } }))
+        const states = await new AniListClient('token').getFavouriteStates([10, 11])
+        expect(states.get(10)).toEqual({ isFavourite: true, isFavouriteBlocked: false })
+        expect(states.get(11)).toEqual({ isFavourite: false, isFavouriteBlocked: true })
+    })
+
+    // Keep last: the failure puts the shared pacer into its 61 s back-off
+    test('favourite toggles are never re-sent after a network failure', async () => {
+        let calls = 0
+        stubFetch(async () => {
+            calls++
+            throw new TypeError('Failed to fetch')
+        })
+        const toggling = new AniListClient('token').toggleFavourites([{ id: 1, type: MediaType.ANIME }])
+        expect(await toggling.then(() => 'sent', () => 'failed')).toBe('failed')
+        expect(calls).toBe(1)
     })
 })

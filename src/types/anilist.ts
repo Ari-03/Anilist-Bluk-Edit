@@ -80,6 +80,8 @@ export interface Media {
     staff?: StaffConnection;
     studios?: StudioConnection;
     isFavourite?: boolean;
+    /** AniList refuses to favourite this title */
+    isFavouriteBlocked?: boolean;
     isAdult?: boolean;
     nextAiringEpisode?: AiringSchedule;
     airingSchedule?: AiringScheduleConnection;

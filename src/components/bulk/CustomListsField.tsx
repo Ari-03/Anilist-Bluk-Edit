@@ -105,9 +105,6 @@ export default function CustomListsField({
                             )
                         })}
                     </div>
-                    <p className="text-[11px] text-fg-subtle mt-2">
-                        Tap to cycle: no change → add to list → remove from list
-                    </p>
                 </>
             )}
         </div>

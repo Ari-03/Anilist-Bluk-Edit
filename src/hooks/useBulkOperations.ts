@@ -5,6 +5,7 @@ import { errorMessage, isAlreadyDeleted } from '@/lib/graphql'
 import { isAbortError } from '@/lib/pacer'
 import { parseEditInput } from '@/lib/scoreFormat'
 import { applyCustomListChanges, CustomListAction } from '@/lib/customLists'
+import { FavouriteAction, planFavourites } from '@/lib/favourites'
 import { MediaList, MediaListStatus, MediaType } from '@/types/anilist'
 
 export interface BulkFormOptions {
@@ -14,6 +15,7 @@ export interface BulkFormOptions {
     private: string
     hiddenFromStatusLists: string
     notes: string
+    favourite: FavouriteAction
     customLists: Record<string, CustomListAction>
 }
 
@@ -24,6 +26,7 @@ export const EMPTY_BULK_OPTIONS: BulkFormOptions = {
     private: '',
     hiddenFromStatusLists: '',
     notes: '',
+    favourite: null,
     customLists: {}
 }
 
@@ -38,6 +41,8 @@ export function summarizeBulkChanges(options: BulkFormOptions, mediaType: MediaT
         changes.push(options.hiddenFromStatusLists === 'true' ? 'Hide from status lists' : 'Show in status lists')
     }
     if (options.notes.trim()) changes.push('Replace notes')
+    if (options.favourite === 'add') changes.push('Add to favourites')
+    if (options.favourite === 'remove') changes.push('Remove from favourites')
     for (const [name, action] of Object.entries(options.customLists)) {
         if (action === 'add') changes.push(`Add to “${name}”`)
         if (action === 'remove') changes.push(`Remove from “${name}”`)
@@ -167,6 +172,71 @@ const saveChunked = async (
     }
 }
 
+/**
+ * Favourite phase: toggles only the entries whose state differs and returns
+ * the entries now in the target state; the rest are failed on the ledger.
+ * ToggleFavourite only flips, so the plan starts from a fresh read of each
+ * title's state, never the list cache: that may be minutes old, or wrong after
+ * a toggle whose reply was lost. `settle` marks successes done as they land
+ * (when nothing else is left to send for them), so Stop keeps them.
+ */
+const setFavourites = async (
+    client: AniListClient,
+    entries: MediaList[],
+    action: Exclude<FavouriteAction, null>,
+    ledger: Ledger,
+    signal: AbortSignal,
+    settle: boolean
+): Promise<MediaList[]> => {
+    let states
+    try {
+        states = await client.getFavouriteStates(entries.map(e => e.mediaId), { signal })
+    } catch (error) {
+        if (isAbortError(error)) throw error
+        ledger.fail(entries.map(e => e.id), `Couldn't check favourites on AniList: ${errorMessage(error)}`)
+        return []
+    }
+    const unread = entries.filter(e => !e.media || !states.has(e.mediaId))
+    ledger.fail(unread.map(e => e.id), "Couldn't check this title's favourite state on AniList")
+    const current = entries.flatMap(e => {
+        const state = states.get(e.mediaId)
+        return state && e.media ? [{ ...e, media: { ...e.media, ...state } }] : []
+    })
+    const store = useStore.getState()
+    store.setMediaFavourite(current.filter(e => e.media.isFavourite).map(e => e.id), true)
+    store.setMediaFavourite(current.filter(e => !e.media.isFavourite).map(e => e.id), false)
+
+    const { target, toToggle, alreadyDone, blocked } = planFavourites(current, action)
+    ledger.fail(blocked.map(e => e.id), "AniList doesn't allow favouriting this title")
+    const done = [...alreadyDone]
+    if (settle) ledger.ok(alreadyDone.map(e => e.id))
+
+    for (const batch of chunk(toToggle, CHUNK_SIZE)) {
+        let results
+        try {
+            const { currentType } = useStore.getState()
+            results = await client.toggleFavourites(
+                batch.map(e => ({ id: e.mediaId, type: e.media?.type ?? currentType })),
+                { signal }
+            )
+        } catch (error) {
+            if (isAbortError(error)) throw error
+            // State unknown (the toggle may have landed); the next run re-reads it
+            ledger.fail(batch.map(e => e.id), errorMessage(error))
+            continue
+        }
+        const flipped = batch.filter((_, i) => results[i].ok)
+        useStore.getState().setMediaFavourite(flipped.map(e => e.id), target)
+        done.push(...flipped)
+        if (settle) ledger.ok(flipped.map(e => e.id))
+        results.forEach((r, i) => {
+            if (!r.ok) ledger.fail([batch[i].id], r.message)
+        })
+        signal.throwIfAborted()
+    }
+    return done
+}
+
 /** Fast path: UpdateMediaListEntries per chunk; a chunk it rejects falls back to per-entry saves */
 const updateFast = async (
     client: AniListClient,
@@ -228,14 +298,17 @@ export function useBulkOperations(client: AniListClient | null) {
         return { ledger: createLedger(allIds, setProgress), signal: controller.signal }
     }
 
-    const finishRun = (kind: Operation, ledger: Ledger) => {
+    /** `wroteEntries`: AniList returned fresh entry data (not a favourite-only run) */
+    const finishRun = (kind: Operation, ledger: Ledger, wroteEntries = true) => {
         const store = useStore.getState()
         ledger.releaseUnattempted()
 
         if (ledger.succeeded.length > 0) {
             // Local state now reflects confirmed server state; keep the
             // freshness window open so nothing schedules a clobbering refetch.
-            store.setLastDataLoad(Date.now())
+            // A favourite-only run read just favourite flags, so it must not
+            // vouch for the rest (custom-list edits rely on this window).
+            if (wroteEntries) store.setLastDataLoad(Date.now())
             store.deselectEntries(ledger.succeeded)
         }
 
@@ -297,7 +370,10 @@ export function useBulkOperations(client: AniListClient | null) {
         const customListChanges = options.customLists
         const hasCustomListChanges = Object.values(customListChanges).some(v => v === 'add' || v === 'remove')
 
-        if (Object.keys(updates).length === 0 && !hasCustomListChanges) {
+        const favourite = options.favourite
+        const hasEntryUpdates = Object.keys(updates).length > 0 || hasCustomListChanges
+
+        if (!hasEntryUpdates && !favourite) {
             store.addNotification({ type: 'warning', message: 'Pick at least one field to change' })
             return false
         }
@@ -308,11 +384,12 @@ export function useBulkOperations(client: AniListClient | null) {
         // customLists is a full-replacement array on AniList's side, so a write
         // built from stale entry data silently drops memberships added
         // elsewhere. Refresh first when the local snapshot is past its window.
+        // (Favourites don't need this: setFavourites reads them fresh.)
         if (hasCustomListChanges) {
             const { lastDataLoad, user } = store
             const fiveMinutes = 5 * 60 * 1000
             if (user && (!lastDataLoad || Date.now() - lastDataLoad > fiveMinutes)) {
-                store.addNotification({ type: 'info', message: 'Refreshing list data before editing custom lists…' })
+                store.addNotification({ type: 'info', message: 'Refreshing list data before editing…' })
                 try {
                     await store.fetchMediaLists(user.id, useStore.getState().currentType, true)
                     const fresh = useStore.getState()
@@ -322,7 +399,7 @@ export function useBulkOperations(client: AniListClient | null) {
                     entries = [...fresh.animeLists, ...fresh.mangaLists]
                         .filter(e => idSet.has(e.id) && (entriesOverride !== undefined || fresh.selectedEntries.has(e.id)))
                 } catch {
-                    store.addNotification({ type: 'error', message: 'Could not refresh list data — aborting custom list changes' })
+                    store.addNotification({ type: 'error', message: 'Could not refresh list data, so nothing was changed' })
                     release()
                     return false
                 }
@@ -351,12 +428,21 @@ export function useBulkOperations(client: AniListClient | null) {
         const { ledger, signal } = startRun(entries)
 
         try {
-            if (!hasCustomListChanges) {
-                await updateFast(client, entries, updates, ledger, signal)
+            // Favourites first; an entry whose favourite failed skips the rest
+            let remaining = entries
+            if (favourite) {
+                remaining = await setFavourites(client, entries, favourite, ledger, signal, !hasEntryUpdates)
+                if (!hasEntryUpdates) remaining = []
+            }
+
+            if (remaining.length === 0) {
+                // nothing left to send
+            } else if (!hasCustomListChanges) {
+                await updateFast(client, remaining, updates, ledger, signal)
             } else {
                 await saveChunked(
                     client,
-                    entries.map(entry => ({
+                    remaining.map(entry => ({
                         id: entry.id,
                         mediaId: entry.mediaId,
                         updates: { ...updates, customLists: applyCustomListChanges(entry.customLists, customListChanges) },
@@ -368,7 +454,7 @@ export function useBulkOperations(client: AniListClient | null) {
         } catch (error) {
             if (!isAbortError(error)) console.error('Bulk update failed:', error)
         } finally {
-            finishRun('update', ledger)
+            finishRun('update', ledger, hasEntryUpdates)
         }
         return true
     }, [client])

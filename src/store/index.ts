@@ -117,6 +117,7 @@ interface AppActions {
     updateMediaListEntry: (entry: MediaList) => void
     mergeMediaListEntries: (partials: Array<Partial<MediaList> & { id: number }>) => void
     removeMediaListEntry: (id: number) => void
+    setMediaFavourite: (entryIds: number[], isFavourite: boolean) => void
     removeMediaListEntries: (ids: number[]) => void
     setIsLoadingLists: (loading: boolean) => void
     setLastDataLoad: (timestamp: number) => void
@@ -385,6 +386,15 @@ export const useStore = create<AppState & AppActions>()(
                         ...(animeChanged ? { animeLists, animeSortedIndices: createSortedIndices(animeLists) } : {}),
                         ...(mangaChanged ? { mangaLists, mangaSortedIndices: createSortedIndices(mangaLists) } : {}),
                     })
+                    get().applyFilters()
+                },
+                // Favourites live on the media, which mutation results don't carry
+                setMediaFavourite: (entryIds, isFavourite) => {
+                    if (entryIds.length === 0) return
+                    const ids = new Set(entryIds)
+                    const update = (lists: MediaList[]) =>
+                        lists.map(e => (ids.has(e.id) && e.media ? { ...e, media: { ...e.media, isFavourite } } : e))
+                    set(state => ({ animeLists: update(state.animeLists), mangaLists: update(state.mangaLists) }))
                     get().applyFilters()
                 },
                 removeMediaListEntry: (id) => {
