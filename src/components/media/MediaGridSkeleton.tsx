@@ -44,7 +44,7 @@ export default function MediaGridSkeleton({ count = 15, viewMode = 'grid' }: Med
     return (
         <div>
             <SectionHeaderSkeleton />
-            <div className="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-4">
+            <div className="mt-1 cover-grid">
                 {Array.from({ length: count }).map((_, i) => (
                     <MediaCardSkeleton key={i} />
                 ))}
