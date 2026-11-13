@@ -89,12 +89,14 @@ function MediaCard({
                     <h3 className="cover-title text-sm font-semibold leading-snug text-white line-clamp-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]">
                         {title}
                     </h3>
-                    <div className="mt-1 flex items-center justify-between gap-1 text-xs text-white">
-                        <span className="flex min-w-0 items-center gap-1 tabular-nums">
+                    {/* Wraps rather than truncates: on the smallest covers a long count
+                        (1000/1155) pushes the score to its own line and both stay readable */}
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-x-1 text-xs text-white">
+                        <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
                             <ProgressIcon className="cover-progress-icon w-3 h-3 flex-shrink-0" />
-                            <span className="truncate">{formatProgress(entry)}</span>
+                            {formatProgress(entry)}
                         </span>
-                        <span className="flex flex-shrink-0 items-center gap-1 tabular-nums">
+                        <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
                             <Star className={cn('w-3 h-3', hasScore(entry) ? 'fill-current text-yellow-400' : 'text-white/40')} />
                             {formatScore(entry)}
                         </span>
