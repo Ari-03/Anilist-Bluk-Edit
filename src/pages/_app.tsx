@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { AppProps } from 'next/app'
 import Head from 'next/head'
 import { Inter } from 'next/font/google'
-import { LazyMotion, domAnimation } from 'framer-motion'
+import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion'
 import { Analytics } from '@vercel/analytics/next'
 import { useStore } from '@/store'
 import '@/styles/globals.css'
@@ -31,7 +31,9 @@ export default function App({ Component, pageProps }: AppProps) {
                 }
             `}</style>
             <LazyMotion features={domAnimation} strict>
-                <Component {...pageProps} />
+                <MotionConfig reducedMotion="user">
+                    <Component {...pageProps} />
+                </MotionConfig>
             </LazyMotion>
             <Analytics />
         </>

@@ -41,7 +41,8 @@ export default function StatusSection({
 
     return (
         <section>
-            <div className="flex items-center gap-2.5">
+            {/* Sticky under the 64px app header so long sections keep their label */}
+            <div className="sticky top-16 z-10 -mx-1 px-1 flex items-center gap-2.5 bg-page/95 backdrop-blur-sm">
                 {bulkEditMode && (
                     <button
                         onClick={allSelected ? onDeselectSection : onSelectSection}
@@ -49,7 +50,7 @@ export default function StatusSection({
                             'flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-150',
                             allSelected || someSelected
                                 ? 'bg-purple border-purple text-white'
-                                : 'border-edge text-transparent hover:border-purple'
+                                : 'border-edge-strong text-transparent hover:border-purple'
                         )}
                         title={allSelected ? 'Deselect all in this section' : 'Select all in this section'}
                     >

@@ -10,8 +10,6 @@ import FormatFilter from '@/components/sidebar/FormatFilter'
 import CountryFilter from '@/components/sidebar/CountryFilter'
 import RangeFilter from '@/components/sidebar/RangeFilter'
 import {
-    Search,
-    X,
     Filter,
     Star,
     Calendar,
@@ -20,8 +18,6 @@ import {
     Tags,
     Tv,
     BookOpen,
-    Grid3X3,
-    List,
     ArrowUpDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -32,8 +28,6 @@ export default function SidebarContent() {
     const {
         currentType,
         setCurrentType,
-        viewMode,
-        setViewMode,
         filters,
         setFilters,
         clearFilters,
@@ -139,26 +133,6 @@ export default function SidebarContent() {
                         className="text-xs font-medium text-danger hover:underline"
                     >
                         Clear all
-                    </button>
-                )}
-            </div>
-
-            {/* Search */}
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-subtle" />
-                <input
-                    type="text"
-                    placeholder="Search titles…"
-                    value={filters.search || ''}
-                    onChange={(e) => setFilters({ search: e.target.value })}
-                    className="input pl-9 pr-8"
-                />
-                {filters.search && (
-                    <button
-                        onClick={() => setFilters({ search: '' })}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-subtle hover:text-fg"
-                    >
-                        <X className="h-4 w-4" />
                     </button>
                 )}
             </div>
@@ -279,18 +253,6 @@ export default function SidebarContent() {
                 </FilterSection>
             </div>
 
-            {/* View mode */}
-            <div className="pt-4 border-t border-edge space-y-2">
-                <label className="text-xs font-semibold text-fg-muted uppercase tracking-wide">View</label>
-                {segmented(
-                    [
-                        { value: 'grid', label: 'Grid', icon: <Grid3X3 className="h-3.5 w-3.5" /> },
-                        { value: 'list', label: 'List', icon: <List className="h-3.5 w-3.5" /> },
-                    ],
-                    viewMode,
-                    (v) => setViewMode(v as 'grid' | 'list')
-                )}
-            </div>
         </div>
     )
 }

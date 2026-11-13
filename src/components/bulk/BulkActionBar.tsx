@@ -1,4 +1,4 @@
-import { CheckSquare, Square, Trash2, Edit3, X, ChevronUp, GitBranch } from 'lucide-react'
+import { CheckSquare, Square, Trash2, Edit3, Check, ChevronUp, GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface BulkActionBarProps {
@@ -27,23 +27,24 @@ export default function BulkActionBar({
     onExit,
 }: BulkActionBarProps) {
     return (
-        <div className="flex items-center gap-2">
+        /* Wraps to two rows on phones: selection on top, actions below */
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-y-2">
             <span className="text-sm font-semibold text-fg tabular-nums whitespace-nowrap">
                 {selectedCount > 0 ? (
-                    <>{selectedCount} selected</>
+                    <>{selectedCount.toLocaleString()} selected</>
                 ) : (
-                    <span className="text-fg-muted font-normal">Click cards to select</span>
+                    <span className="text-fg-muted font-normal">Tap cards to select</span>
                 )}
             </span>
 
-            <div className="h-5 w-px bg-edge mx-1" />
+            <div className="hidden sm:block h-5 w-px bg-edge mx-1" />
 
             <button
                 onClick={allSelected ? onClearSelection : onSelectAll}
                 className="btn-ghost h-8 px-2.5 text-xs whitespace-nowrap"
             >
                 {allSelected ? <Square className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
-                {allSelected ? 'Deselect all' : `Select all (${totalCount})`}
+                {allSelected ? 'Deselect all' : `Select all (${totalCount.toLocaleString()})`}
             </button>
 
             {selectedCount > 0 && !allSelected && (
@@ -52,7 +53,7 @@ export default function BulkActionBar({
                 </button>
             )}
 
-            <div className="flex-1" />
+            <div className="flex-1 basis-full sm:basis-0" />
 
             <button
                 onClick={onFindRelations}
@@ -82,8 +83,9 @@ export default function BulkActionBar({
                 Edit
             </button>
 
-            <button onClick={onExit} className="btn-icon w-8 h-8" title="Exit bulk edit">
-                <X className="w-4 h-4" />
+            <button onClick={onExit} className="btn-ghost h-8 px-2.5 text-xs" title="Leave bulk edit (clears the selection)">
+                <Check className="w-3.5 h-3.5" />
+                Done
             </button>
         </div>
     )

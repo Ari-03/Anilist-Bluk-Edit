@@ -12,7 +12,7 @@ import PartialFailureBar from '@/components/bulk/PartialFailureBar'
 import RelationFinderModal from '@/components/RelationFinderModal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { MediaList } from '@/types/anilist'
-import { CheckSquare, Save, X } from 'lucide-react'
+import { Save, X } from 'lucide-react'
 
 /** Bulk edits touching at least this many entries ask for confirmation first */
 const CONFIRM_THRESHOLD = 25
@@ -22,8 +22,8 @@ interface BulkEditPanelProps {
 }
 
 /**
- * Bulk edit surface: a slim toggle in the toolbar plus a floating action bar
- * pinned to the bottom of the viewport while bulk mode is active, so the cards
+ * Bulk edit surface (entered from ListToolbar): a floating action bar pinned
+ * to the bottom of the viewport while bulk mode is active, so the cards
  * stay visible and animate to their new spots as batches confirm.
  */
 export default function BulkEditPanel({ client }: BulkEditPanelProps) {
@@ -84,19 +84,6 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
 
     return (
         <>
-            {/* Toolbar row above the grid */}
-            <div className="flex items-center justify-between">
-                <p className="text-sm text-fg-muted tabular-nums">
-                    {totalCount} {totalCount === 1 ? 'entry' : 'entries'}
-                </p>
-                {!bulkEditMode && (
-                    <button onClick={() => setBulkEditMode(true)} className="btn-purple h-11 text-base">
-                        <CheckSquare className="w-5 h-5" />
-                        Bulk edit
-                    </button>
-                )}
-            </div>
-
             {/* Floating action bar */}
             <AnimatePresence>
                 {bulkEditMode && (
@@ -118,7 +105,7 @@ export default function BulkEditPanel({ client }: BulkEditPanelProps) {
                                         transition={{ duration: 0.2, ease: 'easeOut' }}
                                         className="overflow-hidden"
                                     >
-                                        <div className="max-h-[50vh] overflow-y-auto pr-1 pb-1">
+                                        <div className="max-h-[55vh] overflow-y-auto pr-1 pb-1">
                                             <BulkEditForm
                                                 options={options}
                                                 onChange={setOptions}
