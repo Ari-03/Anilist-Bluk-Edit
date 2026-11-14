@@ -223,9 +223,12 @@ export default function MediaListView({ client }: MediaListViewProps) {
                         key={entry.id}
                         data-entry-id={entry.id}
                         // content-visibility clips what an entry paints outside its box; the
-                        // margin leaves room for a card's hover lift and shadow
+                        // margin leaves room for a card's hover lift and shadow. Each wrapper
+                        // has its real size without its contents (a cover's 3:4 box, a row's
+                        // 62px), so entries the browser has not rendered yet still sit in
+                        // the right place when ListMotion measures them.
                         className={!deferOffscreen ? undefined : isGrid
-                            ? '[content-visibility:auto] [contain-intrinsic-size:auto_280px] [overflow-clip-margin:12px]'
+                            ? '[content-visibility:auto] aspect-[3/4] [overflow-clip-margin:12px]'
                             : '[content-visibility:auto] [contain-intrinsic-size:auto_62px] [overflow-clip-margin:12px]'}
                     >
                         {isGrid ? <MediaCard {...shared} /> : <MediaListRow {...shared} />}

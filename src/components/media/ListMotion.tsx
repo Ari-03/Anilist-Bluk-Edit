@@ -161,15 +161,18 @@ export default class ListMotion extends Component<ListMotionProps> {
         after.forEach(({ element, rect }, id) => {
             const was = before.get(id)
             if (was) {
-                const dx = was.rect.left - rect.left
-                const dy = was.rect.top - rect.top
-                const moved = Math.abs(dx) >= SAME_PX || Math.abs(dy) >= SAME_PX
+                // Start from the old box, centre to centre. The size only differs when the
+                // entry takes over from its own ghost, which shrinks a little as it fades.
+                const dx = was.rect.left + was.rect.width / 2 - (rect.left + rect.width / 2)
+                const dy = was.rect.top + was.rect.height / 2 - (rect.top + rect.height / 2)
+                const scale = Math.abs(was.rect.width - rect.width) >= SAME_PX ? was.rect.width / rect.width : 1
+                const moved = Math.abs(dx) >= SAME_PX || Math.abs(dy) >= SAME_PX || scale !== 1
                 const { opacity } = was
                 if (!moved && opacity === '1') return
                 // z-index keeps a moving entry above the ones it passes
                 element.animate(
                     [
-                        { transform: `translate(${dx}px, ${dy}px)`, opacity, zIndex: 1 },
+                        { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, opacity, zIndex: 1 },
                         { transform: 'none', opacity: 1, zIndex: 1 },
                     ],
                     { id: 'list-move', duration: glideMs(Math.hypot(dx, dy)), easing: EASE }
