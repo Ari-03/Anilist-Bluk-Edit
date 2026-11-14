@@ -44,6 +44,17 @@ const glideMs = (distance: number) => Math.min(400, 200 + distance * 0.12)
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
+ * An element's place and visibility right now. Opacity is read here, while the
+ * element is still in the page: once React removes an entry, its animations
+ * can no longer be found from the list.
+ */
+const place = (element: HTMLElement): Placed => ({
+    element,
+    rect: element.getBoundingClientRect(),
+    opacity: element.getAnimations().length > 0 ? getComputedStyle(element).opacity : '1',
+})
+
+/**
  * Where each entry that is on screen right now sits, keyed by entry id.
  *
  * Entries are laid out top to bottom in document order, so a binary search
@@ -66,13 +77,9 @@ function measureOnScreen(root: HTMLElement | null): Map<string, Placed> {
         else first = middle + 1
     }
     for (let i = first; i < elements.length; i++) {
-        const element = elements[i]
-        const rect = element.getBoundingClientRect()
-        if (rect.top >= viewportHeight) break
-        // Read here, while the entry is still in the page: once React removes an entry its
-        // animations can no longer be found from the list
-        const opacity = element.getAnimations().length > 0 ? getComputedStyle(element).opacity : '1'
-        placed.set(element.dataset.entryId!, { element, rect, opacity })
+        const placedEntry = place(elements[i])
+        if (placedEntry.rect.top >= viewportHeight) break
+        placed.set(elements[i].dataset.entryId!, placedEntry)
     }
     return placed
 }
@@ -100,6 +107,11 @@ function measureOnScreen(root: HTMLElement | null): Map<string, Placed> {
 export default class ListMotion extends Component<ListMotionProps> {
     private root = createRef<HTMLDivElement>()
     private ghosts = createRef<HTMLDivElement>()
+    /**
+     * Entries last seen drifting out of view. They sit off screen in the layout
+     * but are still visible, so the on-screen scan would not reach them.
+     */
+    private drifting = new Map<string, HTMLElement>()
 
     componentDidMount() {
         this.play(new Map())
@@ -108,7 +120,21 @@ export default class ListMotion extends Component<ListMotionProps> {
     getSnapshotBeforeUpdate(previous: ListMotionProps): Map<string, Placed> | null {
         if (previous.entries === this.props.entries && previous.layoutKey === this.props.layoutKey) return null
         if (reducedMotion()) return null
-        return previous.layoutKey === this.props.layoutKey ? measureOnScreen(this.root.current) : new Map()
+        if (previous.layoutKey !== this.props.layoutKey) return new Map()
+
+        const placed = measureOnScreen(this.root.current)
+        // Entries still fading out are on screen too, though the scan above does not find
+        // them. Counting them in lets one that comes straight back carry on from where it
+        // visibly is, instead of blinking out and rising in again as a second copy.
+        this.drifting.forEach((element, id) => {
+            const stillDrifting = element.isConnected && element.getAnimations().some(a => a.id === 'list-out')
+            if (stillDrifting && !placed.has(id)) placed.set(id, place(element))
+        })
+        this.ghosts.current?.querySelectorAll<HTMLElement>('[data-ghost-id]').forEach(ghost => {
+            const id = ghost.dataset.ghostId!
+            if (!placed.has(id)) placed.set(id, place(ghost))
+        })
+        return placed
     }
 
     componentDidUpdate(_previous: ListMotionProps, _state: unknown, before: Map<string, Placed> | null) {
@@ -126,6 +152,7 @@ export default class ListMotion extends Component<ListMotionProps> {
         root.getAnimations({ subtree: true }).forEach(animation => {
             if (MOTION_IDS.includes(animation.id)) animation.cancel()
         })
+        this.drifting.clear()
 
         const rootRect = root.getBoundingClientRect()
         const after = measureOnScreen(root)
@@ -161,10 +188,18 @@ export default class ListMotion extends Component<ListMotionProps> {
             }
         })
 
+        // A ghost whose entry is back has handed over to it (the entry started from the
+        // ghost's place and opacity above)
+        ghosts.querySelectorAll<HTMLElement>('[data-ghost-id]').forEach(ghost => {
+            if (after.has(ghost.dataset.ghostId!)) ghost.remove()
+        })
+
         let ghostCount = 0
         before.forEach(({ element, rect, opacity }, id) => {
-            if (after.has(id)) return
+            // Back on screen, or a ghost already fading out: nothing more to do
+            if (after.has(id) || element.parentElement === ghosts) return
             if (element.isConnected) {
+                this.drifting.set(id, element)
                 // Still in the list, but now out of view: start where it was and drift
                 // a little towards where it went while fading out
                 const now = element.getBoundingClientRect()
@@ -185,6 +220,7 @@ export default class ListMotion extends Component<ListMotionProps> {
                 // Gone from the list. React has let go of its element, so it can be put
                 // back where it was, outside the layout, just long enough to fade out.
                 element.removeAttribute('data-entry-id')
+                element.dataset.ghostId = id
                 element.className = ''
                 // Its buttons and links must not take focus or clicks while it fades
                 element.inert = true

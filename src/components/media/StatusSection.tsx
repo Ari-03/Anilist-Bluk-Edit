@@ -38,6 +38,13 @@ export default function StatusSection({
 }: StatusSectionProps) {
     /** True while the collapse or expand animation runs */
     const [resizing, setResizing] = useState(false)
+    // Start clipping whenever `collapsed` changes, however it changed: the header below,
+    // or a switch between anime and manga, which keep their own collapsed sections
+    const [wasCollapsed, setWasCollapsed] = useState(collapsed)
+    if (wasCollapsed !== collapsed) {
+        setWasCollapsed(collapsed)
+        setResizing(true)
+    }
     const allSelected = count > 0 && selectedCount === count
     const someSelected = selectedCount > 0 && !allSelected
 
@@ -68,10 +75,7 @@ export default function StatusSection({
                     </button>
                 )}
                 <button
-                    onClick={() => {
-                        setResizing(true)
-                        onToggleCollapsed()
-                    }}
+                    onClick={onToggleCollapsed}
                     aria-expanded={!collapsed}
                     className="flex flex-1 items-center gap-2.5 py-2 touch:min-h-11 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     title={collapsed ? 'Expand section' : 'Collapse section'}
