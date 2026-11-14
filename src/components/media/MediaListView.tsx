@@ -174,20 +174,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
         filters.score?.max
     )
 
-    if (filteredEntries.length === 0) {
-        return (
-            <EmptyState
-                currentType={currentType}
-                libraryEmpty={currentLists.length === 0}
-                hasActiveFilters={hasActiveFilters}
-                onRefresh={() => {
-                    if (user) useStore.getState().fetchMediaLists(user.id, currentType, true).catch(() => { })
-                }}
-                onClearFilters={clearFilters}
-            />
-        )
-    }
-
     const isGrid = viewMode === 'grid'
     const containerClass = isGrid ? 'cover-grid' : 'flex flex-col gap-1.5'
 
@@ -237,9 +223,12 @@ export default function MediaListView({ client }: MediaListViewProps) {
                         key={entry.id}
                         data-entry-id={entry.id}
                         // content-visibility clips what an entry paints outside its box; the
-                        // margin leaves room for a card's hover lift and shadow
+                        // margin leaves room for a card's hover lift and shadow. Each wrapper
+                        // has its real size without its contents (a cover's 3:4 box, a row's
+                        // 62px), so entries the browser has not rendered yet still sit in
+                        // the right place when ListMotion measures them.
                         className={!deferOffscreen ? undefined : isGrid
-                            ? '[content-visibility:auto] [contain-intrinsic-size:auto_280px] [overflow-clip-margin:12px]'
+                            ? '[content-visibility:auto] aspect-[3/4] [overflow-clip-margin:12px]'
                             : '[content-visibility:auto] [contain-intrinsic-size:auto_62px] [overflow-clip-margin:12px]'}
                     >
                         {isGrid ? <MediaCard {...shared} /> : <MediaListRow {...shared} />}
@@ -251,9 +240,20 @@ export default function MediaListView({ client }: MediaListViewProps) {
 
     return (
         <>
-            {/* Entries glide to their new places when the list is searched, filtered, sorted or edited */}
+            {/* Entries glide to their new places when the list is searched, filtered, sorted or
+                edited. The empty state sits inside too, so the last entries can fade out over it. */}
             <ListMotion entries={filteredEntries} layoutKey={`${currentType}-${viewMode}`}>
-                {showSections ? (
+                {filteredEntries.length === 0 ? (
+                    <EmptyState
+                        currentType={currentType}
+                        libraryEmpty={currentLists.length === 0}
+                        hasActiveFilters={hasActiveFilters}
+                        onRefresh={() => {
+                            if (user) useStore.getState().fetchMediaLists(user.id, currentType, true).catch(() => { })
+                        }}
+                        onClearFilters={clearFilters}
+                    />
+                ) : showSections ? (
                     <div className="space-y-4">
                         {orderedStatuses.map(status => {
                             const entries = statusGroups.get(status)!
