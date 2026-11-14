@@ -174,20 +174,6 @@ export default function MediaListView({ client }: MediaListViewProps) {
         filters.score?.max
     )
 
-    if (filteredEntries.length === 0) {
-        return (
-            <EmptyState
-                currentType={currentType}
-                libraryEmpty={currentLists.length === 0}
-                hasActiveFilters={hasActiveFilters}
-                onRefresh={() => {
-                    if (user) useStore.getState().fetchMediaLists(user.id, currentType, true).catch(() => { })
-                }}
-                onClearFilters={clearFilters}
-            />
-        )
-    }
-
     const isGrid = viewMode === 'grid'
     const containerClass = isGrid ? 'cover-grid' : 'flex flex-col gap-1.5'
 
@@ -251,9 +237,20 @@ export default function MediaListView({ client }: MediaListViewProps) {
 
     return (
         <>
-            {/* Entries glide to their new places when the list is searched, filtered, sorted or edited */}
+            {/* Entries glide to their new places when the list is searched, filtered, sorted or
+                edited. The empty state sits inside too, so the last entries can fade out over it. */}
             <ListMotion entries={filteredEntries} layoutKey={`${currentType}-${viewMode}`}>
-                {showSections ? (
+                {filteredEntries.length === 0 ? (
+                    <EmptyState
+                        currentType={currentType}
+                        libraryEmpty={currentLists.length === 0}
+                        hasActiveFilters={hasActiveFilters}
+                        onRefresh={() => {
+                            if (user) useStore.getState().fetchMediaLists(user.id, currentType, true).catch(() => { })
+                        }}
+                        onClearFilters={clearFilters}
+                    />
+                ) : showSections ? (
                     <div className="space-y-4">
                         {orderedStatuses.map(status => {
                             const entries = statusGroups.get(status)!

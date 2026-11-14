@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { ReactNode, useState } from 'react'
 import { AnimatePresence, m } from 'framer-motion'
 import { MediaListStatus, MediaType } from '@/types/anilist'
 import { getStatusColor, getStatusLabel } from '@/lib/anilist'
@@ -36,6 +36,8 @@ export default function StatusSection({
     onDeselectSection,
     children,
 }: StatusSectionProps) {
+    /** True while the collapse or expand animation runs */
+    const [resizing, setResizing] = useState(false)
     const allSelected = count > 0 && selectedCount === count
     const someSelected = selectedCount > 0 && !allSelected
 
@@ -66,7 +68,10 @@ export default function StatusSection({
                     </button>
                 )}
                 <button
-                    onClick={onToggleCollapsed}
+                    onClick={() => {
+                        setResizing(true)
+                        onToggleCollapsed()
+                    }}
                     aria-expanded={!collapsed}
                     className="flex flex-1 items-center gap-2.5 py-2 touch:min-h-11 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     title={collapsed ? 'Expand section' : 'Collapse section'}
@@ -86,20 +91,25 @@ export default function StatusSection({
                 </button>
             </div>
 
-            <AnimatePresence initial={false}>
-                {!collapsed && (
-                    <m.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2, ease: 'easeOut' }}
-                        /* -mx-1 + inner px-1 keep card rings/shadows clear of the clip edge */
-                        className="overflow-hidden -mx-1"
-                    >
-                        <div className="px-1 py-1">{children}</div>
-                    </m.div>
-                )}
-            </AnimatePresence>
+            {/* Clipped only while collapsing or expanding. At rest the contents may paint
+                outside, so entries can glide between sections (ListMotion) and card
+                shadows are not cut off at the section's edge. The clip sits on this
+                wrapper because AnimatePresence freezes the props of an exiting child. */}
+            <div className={cn('-mx-1', resizing && 'overflow-hidden')}>
+                <AnimatePresence initial={false} onExitComplete={() => setResizing(false)}>
+                    {!collapsed && (
+                        <m.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                            onAnimationComplete={() => setResizing(false)}
+                        >
+                            <div className="px-1 py-1">{children}</div>
+                        </m.div>
+                    )}
+                </AnimatePresence>
+            </div>
         </section>
     )
 }

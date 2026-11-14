@@ -1,12 +1,13 @@
 import { Component, createRef, ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 
 interface ListMotionProps {
     /** A new value means the list's contents or order changed (the filtered entries array) */
     entries: unknown
     /**
      * Identifies the layout the entries are drawn in. When it changes (grid to
-     * list, anime to manga) nothing lines up with what was there, so entries
-     * fade in rather than fly across the screen.
+     * list, anime to manga) nothing lines up with what was there, so the new
+     * list rises in and nothing flies across the screen.
      */
     layoutKey: string
     className?: string
@@ -16,15 +17,29 @@ interface ListMotionProps {
 interface Placed {
     element: HTMLElement
     rect: DOMRect
+    /** How visible the entry was: below 1 only while one of this component's fades is running on it */
+    opacity: string
 }
 
-const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
-const FADE_MS = 160
-/** A whole new list (first load, grid to list, anime to manga) fades in one entry after another, up to this many steps */
-const STAGGER_STEPS = 8
-const STAGGER_MS = 12
-/** No glide travels further than this, however large the entries are */
-const MAX_GLIDE_PX = 480
+const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
+/** Entries new to the screen rise this far into place */
+const RISE_PX = 44
+const RISE_MS = 260
+/** Entries arriving together rise one after another, top to bottom, up to this many steps */
+const RISE_STAGGER_STEPS = 12
+const RISE_STAGGER_MS = 12
+/** Entries leaving the screen fade over this long, drifting this far if they are still in the list */
+const LEAVE_MS = 170
+const DRIFT_PX = 28
+/** At most this many departing entries are kept on screen to fade out */
+const MAX_GHOSTS = 60
+/** Positions closer than this count as the same (sub-pixel layout differences) */
+const SAME_PX = 1
+/** Animations this component starts on entries; each moves its entry, so a new change stops them before measuring */
+const MOTION_IDS = ['list-move', 'list-enter', 'list-out']
+
+/** Longer trips take a little longer, so far glides don't look rushed */
+const glideMs = (distance: number) => Math.min(400, 200 + distance * 0.12)
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -35,7 +50,7 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
  * finds the first one that reaches the viewport and the scan stops at the
  * first one below it. That keeps the work to a screenful plus a few probes
  * however long the list is. (A glide in flight can sit a little out of order;
- * at worst an entry near the viewport's edge is missed and fades in instead.)
+ * at worst an entry near the viewport's edge is missed and rises in instead.)
  */
 function measureOnScreen(root: HTMLElement | null): Map<string, Placed> {
     const placed = new Map<string, Placed>()
@@ -54,40 +69,29 @@ function measureOnScreen(root: HTMLElement | null): Map<string, Placed> {
         const element = elements[i]
         const rect = element.getBoundingClientRect()
         if (rect.top >= viewportHeight) break
-        placed.set(element.dataset.entryId!, { element, rect })
+        // Read here, while the entry is still in the page: once React removes an entry its
+        // animations can no longer be found from the list
+        const opacity = element.getAnimations().length > 0 ? getComputedStyle(element).opacity : '1'
+        placed.set(element.dataset.entryId!, { element, rect, opacity })
     }
     return placed
 }
 
-/** Positions closer than this count as the same (sub-pixel layout differences) */
-const SAME_PX = 1
-
 /**
- * Whether an entry should glide from `was` to `now`. A glide runs along one
- * row or one column, and only a couple of entries far: a row closing up, an
- * entry dropping to the row below. Diagonal and long trips would pass over
- * other entries, and a trip that starts outside the entry's own section would
- * be clipped at the section's edge. Those fade in at their destination instead.
- */
-function shouldGlide(element: HTMLElement, was: DOMRect, now: DOMRect): boolean {
-    const dx = Math.abs(was.left - now.left)
-    const dy = Math.abs(was.top - now.top)
-    if (dx >= SAME_PX && dy >= SAME_PX) return false
-    const reach = Math.min(MAX_GLIDE_PX, 2.5 * (dx >= SAME_PX ? now.width : now.height))
-    if (dx + dy > reach) return false
-    const section = element.closest('section')?.getBoundingClientRect()
-    return !section || (was.top >= section.top && was.bottom <= section.bottom)
-}
-
-/**
- * Animates the list when it changes: entries that stay nearby glide from where
- * they were to where they now are, and entries that are new to the screen, or
- * came from far away, fade in. Entries that leave simply go. Children mark
- * each entry's outer element with `data-entry-id`.
+ * Animates the list when it changes, so a search or filter reads as the same
+ * entries rearranging rather than a new list popping in:
+ *
+ * - an entry that was on screen and still is glides to its new place;
+ * - an entry that is new to the screen rises into place from below;
+ * - an entry that was on screen and is gone fades out where it was (its old
+ *   element is kept on screen as a ghost for the length of the fade), or, if
+ *   it only moved out of view, drifts off towards where it went.
+ *
+ * Children mark each entry's outer element with `data-entry-id`.
  *
  * Only entries on screen are measured and animated, so a library of 5,000
- * costs no more than a screenful. The entries keep their place in the page,
- * so they pass under sticky headers and open menus as usual.
+ * costs no more than a screenful. Entries keep their place in the page, so
+ * they pass under sticky headers and open menus as usual.
  *
  * A class because getSnapshotBeforeUpdate is the one React hook point that
  * sees the DOM after a render but before its changes are applied, which is
@@ -95,6 +99,7 @@ function shouldGlide(element: HTMLElement, was: DOMRect, now: DOMRect): boolean 
  */
 export default class ListMotion extends Component<ListMotionProps> {
     private root = createRef<HTMLDivElement>()
+    private ghosts = createRef<HTMLDivElement>()
 
     componentDidMount() {
         this.play(new Map())
@@ -112,49 +117,107 @@ export default class ListMotion extends Component<ListMotionProps> {
 
     private play(before: Map<string, Placed>) {
         const root = this.root.current
-        if (!root || reducedMotion()) return
+        const ghosts = this.ghosts.current
+        if (!root || !ghosts || reducedMotion()) return
 
-        // A change can land mid-flight. `before` already holds the in-flight positions;
-        // stop the glides so the positions measured next are the resting ones. Fades
-        // don't move anything, so they carry on.
+        // A change can land mid-flight. `before` already holds the in-flight positions and
+        // how visible each entry was, so a fade in progress carries on from there. Stop
+        // what is moving so the positions measured next are the resting ones.
         root.getAnimations({ subtree: true }).forEach(animation => {
-            if (animation.id === 'list-move') animation.cancel()
+            if (MOTION_IDS.includes(animation.id)) animation.cancel()
         })
 
-        // Stagger only a whole new list. While filtering, newcomers fade in together
-        // so the list settles as fast as the entries that stayed
-        const stagger = before.size === 0
-        let entering = 0
-        measureOnScreen(root).forEach(({ element, rect }, id) => {
-            const was = before.get(id)?.rect
-            if (was && Math.abs(was.left - rect.left) < SAME_PX && Math.abs(was.top - rect.top) < SAME_PX) return
+        const rootRect = root.getBoundingClientRect()
+        const after = measureOnScreen(root)
 
-            if (was && shouldGlide(element, was, rect)) {
-                const dx = was.left - rect.left
-                const dy = was.top - rect.top
+        let rising = 0
+        after.forEach(({ element, rect }, id) => {
+            const was = before.get(id)
+            if (was) {
+                const dx = was.rect.left - rect.left
+                const dy = was.rect.top - rect.top
+                const moved = Math.abs(dx) >= SAME_PX || Math.abs(dy) >= SAME_PX
+                const { opacity } = was
+                if (!moved && opacity === '1') return
                 // z-index keeps a moving entry above the ones it passes
                 element.animate(
-                    [{ transform: `translate(${dx}px, ${dy}px)`, zIndex: 1 }, { transform: 'none', zIndex: 1 }],
-                    { id: 'list-move', duration: 220 + Math.hypot(dx, dy) * 0.1, easing: EASE }
+                    [
+                        { transform: `translate(${dx}px, ${dy}px)`, opacity, zIndex: 1 },
+                        { transform: 'none', opacity: 1, zIndex: 1 },
+                    ],
+                    { id: 'list-move', duration: glideMs(Math.hypot(dx, dy)), easing: EASE }
                 )
             } else {
-                // An entry that was already on screen is familiar, so it settles in from
-                // part-way rather than blinking out and back
-                element.animate([{ opacity: was ? 0.4 : 0 }, { opacity: 1 }], {
-                    id: 'list-enter',
-                    duration: FADE_MS,
-                    easing: EASE,
-                    fill: 'backwards',
-                    delay: stagger ? Math.min(entering++, STAGGER_STEPS) * STAGGER_MS : 0,
+                element.animate(
+                    [{ transform: `translateY(${RISE_PX}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }],
+                    {
+                        id: 'list-enter',
+                        duration: RISE_MS,
+                        easing: EASE,
+                        fill: 'backwards',
+                        delay: Math.min(rising++, RISE_STAGGER_STEPS) * RISE_STAGGER_MS,
+                    }
+                )
+            }
+        })
+
+        let ghostCount = 0
+        before.forEach(({ element, rect, opacity }, id) => {
+            if (after.has(id)) return
+            if (element.isConnected) {
+                // Still in the list, but now out of view: start where it was and drift
+                // a little towards where it went while fading out
+                const now = element.getBoundingClientRect()
+                const dx = rect.left - now.left
+                const dy = rect.top - now.top
+                const length = Math.hypot(dx, dy) || 1
+                element.animate(
+                    [
+                        { transform: `translate(${dx}px, ${dy}px)`, opacity },
+                        {
+                            transform: `translate(${dx - (dx / length) * DRIFT_PX}px, ${dy - (dy / length) * DRIFT_PX}px)`,
+                            opacity: 0,
+                        },
+                    ],
+                    { id: 'list-out', duration: LEAVE_MS, easing: 'ease-out' }
+                )
+            } else if (ghostCount++ < MAX_GHOSTS) {
+                // Gone from the list. React has let go of its element, so it can be put
+                // back where it was, outside the layout, just long enough to fade out.
+                element.removeAttribute('data-entry-id')
+                element.className = ''
+                // Its buttons and links must not take focus or clicks while it fades
+                element.inert = true
+                Object.assign(element.style, {
+                    position: 'absolute',
+                    left: `${rect.left - rootRect.left}px`,
+                    top: `${rect.top - rootRect.top}px`,
+                    width: `${rect.width}px`,
+                    height: `${rect.height}px`,
                 })
+                // Whatever was running on it stopped mattering when it left the list
+                element.getAnimations().forEach(animation => animation.cancel())
+                ghosts.appendChild(element)
+                const remove = () => element.remove()
+                element
+                    .animate([{ opacity, transform: 'none' }, { opacity: 0, transform: 'scale(0.94)' }], {
+                        id: 'list-ghost',
+                        duration: LEAVE_MS,
+                        easing: 'ease-out',
+                        // Stay faded out until removed, so the ghost can never flash back
+                        fill: 'forwards',
+                    })
+                    .finished.then(remove, remove)
             }
         })
     }
 
     render() {
         return (
-            <div ref={this.root} className={this.props.className}>
+            <div ref={this.root} className={cn('relative', this.props.className)}>
                 {this.props.children}
+                {/* Departing entries fade out here, laid over the list without taking up room in it */}
+                <div ref={this.ghosts} data-list-ghosts aria-hidden className="pointer-events-none absolute inset-0" />
             </div>
         )
     }
